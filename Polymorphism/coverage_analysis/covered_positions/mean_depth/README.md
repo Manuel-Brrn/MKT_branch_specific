@@ -4,7 +4,7 @@ Bash script that calculates mean sequencing depth from position-level depth file
 ## Usage
 ```bash
 ./calculate_mean_depth.sh covered.depth all.depth output_dir
-
+```
 #Input Files
 
  #   Covered Positions (covered.depth):
@@ -47,7 +47,9 @@ For each position in both files, the script:
 
 
 # Run analysis
+```bash
 ./calculate_mean_depth.sh \
     data/covered.depth \
     data/all.depth \
     results/
+```
