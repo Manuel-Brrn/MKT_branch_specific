@@ -14,6 +14,10 @@ Best-reciprocal similarity” requires that the sequences pass two criteria:
 These requirements limit identification to orthologs (non-orthologs may be identified due to identical E-values or the absence of a true ortholog).
 
 ```bash
+mkdir Similarity_Groups
+```
+
+```bash
 #!/bin/bash
 #SBATCH --job-name=best_reciprocal_groups
 #SBATCH --output=log_%j_%x.out
