@@ -1,0 +1,8 @@
+Urartu cds before cleaning: 57 401
+urartu cds after cleaning: 57 293
+
+Monococcum cds before cleaning: 42 811
+Monococcum cds after cleaning: 38 425
+
+Hordeum cds before cleaning: 39 179
+Hordeum cds after cleaning: 38 962
