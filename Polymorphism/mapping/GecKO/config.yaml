@@ -1,0 +1,28 @@
+# Please adapt TRIM_DIRS and partition and Mapping_PairedEndFastqs:partition
+default-resources:
+  - mem_mb=10000
+  - partition=agap_normal # Partition that accept long jobs (at least 24h00)
+  - disk_mb=16000
+
+set-resources:
+  - Mapping_PairedEndFastqs:mem_mb=60000
+  - Mapping_PairedEndFastqs:partition=agap_bigmem # Partition that accept huge memory consumptions
+  - Mapping_PairedEndFastqs:disk_mb=16000
+
+set-threads:
+  - Mapping_PairedEndFastqs=8
+
+# ---------------------------- This is supposed to be left untouched ----------------------------
+cluster:
+  mkdir -p Logs_ReadMappingWorkflow_speltoides_TrMo &&
+  WILDCARDS_NAMES=$(echo {wildcards} | awk -F "=|," '{{WC=""; for (i=2; i<=NF; i+=2) {{WC=WC"_"$i}}; print WC}}') &&
+  sbatch
+  --partition={resources.partition}
+  --cpus-per-task={threads}
+  --mem-per-cpu={resources.mem_mb}M
+  --job-name=RM.{rule}
+  --output=Logs_ReadMappingWorkflow_speltoides_TrMo/{rule}${{WILDCARDS_NAMES}}.%j.log
+# -----------------------------------------------------------------------------------------------
+
+latency-wait: 90
+jobs: 1
