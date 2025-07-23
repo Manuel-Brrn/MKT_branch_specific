@@ -6,14 +6,16 @@ This pipeline uses reads2snp to identify SNPs and create consensus sequences fro
 ## Usage
 ```bash
 sbatch read2snp_speltoides.sbatch <bam_list.txt> <reference.fasta> <output_directory>
-
+```
 #Example
 #bash
 
+```bash
 sbatch read2snp_speltoides.sbatch \
     /path/to/bam_list.txt \
     /path/to/reference.fasta \
     /path/to/output_dir
+```
 
 #Required Arguments
 
