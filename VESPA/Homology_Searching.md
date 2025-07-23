@@ -22,6 +22,7 @@ python3
 ```
 
 **Run Orthofinder:** 
+The directory must point where the species fasta files of proteins sequences are present
 ```bash
 python3 orthofinder.py -f /home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/VESPA/cds_sequences/database/orthofinder_input
 ```
