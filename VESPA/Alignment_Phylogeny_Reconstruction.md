@@ -33,3 +33,9 @@ done
 
 echo "Alignments completed. Results in $OUTPUT_DIR/"
 ```
+
+**HmmCleaner**
+```bash
+conda activate perl_env 
+cpanm Bio::MUST::Apps::HmmCleaner
+```
