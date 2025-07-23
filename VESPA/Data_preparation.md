@@ -35,7 +35,7 @@ python2 vespa.py translate -input=Cleaned_TA299-HC-cds_v1.1.renamed.fasta -cleav
  sed -E 's/^>Hordeum_vulgare_([^ ]+) gene=.*/>H_vulgare|\1/' Translated_Cleaned_hordeum_full_CDS.fasta > translated_hordeum_renamed.fasta
 ```
 
- ### **create_database**
+ ### **create_database for Blast**
 The create_database function was designed for users to concatenate multiple genomes into the single database required for homology searching. The function operates by building the database a single sequence at a time.
 Converts a FASTA file into a searchable BLAST database, allowing to:
 
