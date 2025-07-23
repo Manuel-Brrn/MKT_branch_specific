@@ -38,4 +38,13 @@ echo "Alignments completed. Results in $OUTPUT_DIR/"
 ```bash
 conda activate perl_env 
 cpanm Bio::MUST::Apps::HmmCleaner
+
+wget http://www.cpan.org/authors/id/B/BI/BIGPRESH/Getopt-Euclid-0.4.8.tar.gz
+tar -xzf Getopt-Euclid-0.4.8.tar.gz
+cd Getopt-Euclid-0.4.8
+
+perl Makefile.PL INSTALL_BASE=$HOME/perl5
+make install
+
+HmmCleaner.pl --version
 ```
