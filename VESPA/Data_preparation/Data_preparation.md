@@ -3,8 +3,7 @@
 |||||                        **Phase 1: Data Preparation**                       |||||
 ----------------------------------------------------------------------------------
 This phase included for users new to bioinformatics. The phase prepares downloaded
-genomes for homology searching using the two VESPA supported homology search tools:
-BLAST and HMMER.
+genomes for homology searching.
 
 Commands: clean, ensemble_clean, translate, create_database, gene_selection
 ----------------------------------------------------------------------------------
