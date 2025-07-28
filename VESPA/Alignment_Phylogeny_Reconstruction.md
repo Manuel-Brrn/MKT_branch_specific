@@ -36,15 +36,31 @@ echo "Alignments completed. Results in $OUTPUT_DIR/"
 
 **HmmCleaner**
 ```bash
-conda activate perl_env 
+cd /home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/VESPA/alignment/Bio-MUST-Apps-HmmCleaner-0.243280
+module load hmmer/3.3.2-singularity
 cpanm Bio::MUST::Apps::HmmCleaner
-
-wget http://www.cpan.org/authors/id/B/BI/BIGPRESH/Getopt-Euclid-0.4.8.tar.gz
-tar -xzf Getopt-Euclid-0.4.8.tar.gz
-cd Getopt-Euclid-0.4.8
-
-perl Makefile.PL INSTALL_BASE=$HOME/perl5
-make install
+/home/barrientosm/my_perl_5.36.0/bin/cpanm -l ~/my_perl_5.36.0 \
+    namespace::autoclean
+/home/barrientosm/my_perl_5.36.0/bin/cpanm -l ~/my_perl_5.36.0 \
+    PadWalker
+/home/barrientosm/my_perl_5.36.0/bin/cpanm -l ~/my_perl_5.36.0 \
+    Bio::MUST::Drivers
 
 HmmCleaner.pl --version
+
+export PERL5LIB=/home/barrientosm/my_perl_5.36.0/lib/site_perl/5.36.0:/home/barrientosm/my_perl_5.36.0/lib/site_perl/5.36.0/x86_64-linux:/home/barrientosm/my_perl_5.36.0/lib/5.36.0:/home/barrientosm/my_perl_5.36.0/lib/5.36.0/x86_64-linux
+export PATH=/home/barrientosm/my_perl_5.36.0/bin:$PATH
+
+ for f in /home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/VESPA/alignment/mafft/*.fa; do
+     base=$(basename "$f" .fa);
+cleaned="/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/VESPA/alignment/mafft/${base}_hmm.fasta";
+
+if [ ! -f "$cleaned" ]; then
+echo "=== Processing $f ===";
+env  PERL5LIB=/home/barrientosm/my_perl_5.36.0/lib/perl5:/home/barrientosm/my_perl_5.36.0/lib/perl5/x86_64-linux \
+     /home/barrientosm/my_perl_5.36.0/bin/perl -Ilib bin/HmmCleaner.pl "$f";
+else
+echo "=== Skipping $f (already cleaned) ===";
+fi;
+done > hmmcleaner_all.log 2>&1
 ```
