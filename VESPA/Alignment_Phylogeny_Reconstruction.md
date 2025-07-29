@@ -208,6 +208,15 @@ This function automates the process of reading the output of ProtTest3. The func
 
 map_alignments: The map_alignments function is designed to automate the conversion of protein MSAs to nucleotide. This process is mandatory as the codon substitution models of codeML require nucleotide alignments. Protein-MSA guided nucleotide MSAs are generated rather than directly generating nucleotide MSAs because: i) each column within the protein MSA represents aligned codons and therefore avoids aligning incomplete codons or frame-shift mutations, and ii) protein MSAs represent a comparison of the phenotype-producing elements of protein-coding sequences. The function begins by reading the protein MSA to map the non-gap position of each codon within the inferred nucleotide alignment. The sequence of the mapped codons is then inferred using the nucleotide dataset (preferably as a database) from earlier in the pipeline. If the mapping process results in no errors, the respective nucleotide MSA is created. All errors detected by the function will be returned within a separate log file. Please note that the map_alignments function requires the option -database to indicate the nucleotide dataset for correct sequence inference.
 
+**Nucleotides database**
+```bash
+ sed -E 's/^>Hordeum_vulgare_([^ ]+) gene=.*/>H_vulgare|\1/' Cleaned_hordeum_full_CDS.fasta > Cleaned_hordeum_full_CDS_renamed.fasta
+
+ sed -E 's/^>transcript:([^ ]+).*/>T_urartu|\1/' Cleaned_Triticum_urartu.IGDB.59.chr_cds.fasta > Cleaned_Triticum_urartu.IGDB.59.chr_cds_renamed.fasta
+
+ sed -E 's/^>Tm\.(.+)/>T_monococcum|\1/' Cleaned_TA299-HC-cds_v1.1.fasta > Cleaned_TA299-HC-cds_v1.1_renamed.fasta
+```
+
 **Translate again in nucleotides**
 ```bash
 #!/bin/bash
@@ -217,32 +226,52 @@ map_alignments: The map_alignments function is designed to automate the conversi
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --mem=12G
-#SBATCH --time=06:00:00
-#SBATCH --partition=agap_normal
+#SBATCH --time=01:00:00
+#SBATCH --partition=agap_short
 
 module load bioinfo-cirad
 module load python/2.7.18
 
+# === CONFIGURATION ===
 INPUT_DIR="/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/VESPA/prottest/alignments_inputs"
 VESPA_SCRIPT="/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/VESPA/prottest/vespa.py"
-CDS_DATABASE="/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/VESPA/cds_sequences/database/translated_all_species.fasta"
-OUTPUT_DIR="/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/VESPA/gene_trees/Map_Gaps_cleaned"
+CDS_DATABASE="/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/VESPA/cds_sequences/database/cds_database.fasta"
+OUTPUT_BASE="/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/VESPA/gene_trees/Map_Gaps_cleaned"
 
-mkdir -p "$OUTPUT_DIR"
-
-# Change to input directory
-cd "$INPUT_DIR" || { echo "Failed to change to directory $INPUT_DIR"; exit 1; }
+mkdir -p "$OUTPUT_BASE"
+cd "$INPUT_DIR" || { echo "Erreur : impossible d'accéder à $INPUT_DIR"; exit 1; }
 
 for fasta_file in *hmm.fasta; do
     [ ! -f "$fasta_file" ] && continue
 
-    echo "Processing $fasta_file..."
+    hog_id=$(echo "$fasta_file" | grep -o 'HOG[0-9]\+')
+    hog_output_dir="$OUTPUT_BASE/$hog_id"
+    mkdir -p "$hog_output_dir"
 
-    # Run map_alignments on the file
-    python2 "$VESPA_SCRIPT" map_alignments -input="$fasta_file" -database="$CDS_DATABASE"
+    # Nom temporaire sans extension
+    tmp_name="$hog_id"
+    cp "$fasta_file" "$hog_output_dir/$tmp_name"
+
+    # Créer le répertoire attendu par vespa.py
+    mkdir -p "$hog_output_dir/Map_Gaps_${hog_id}"
+
+    echo "Traitement de $hog_id"
+
+    (
+        cd "$hog_output_dir" && \
+        python2 "$VESPA_SCRIPT" map_alignments \
+            -input="$tmp_name" \
+            -database="$CDS_DATABASE"
+    )
+
+    if [ -f "$hog_output_dir/${hog_id}_aln_hmm.fasta" ]; then
+        echo "OK pour $hog_id"
+    else
+        echo "ÉCHEC pour $hog_id"
+    fi
 done
 
-echo "Processing complete. Output will be in: $OUTPUT_DIR"
+echo "Traitement terminé. Résultats dans : $OUTPUT_BASE"
 ```
 
 **Species Tree**
