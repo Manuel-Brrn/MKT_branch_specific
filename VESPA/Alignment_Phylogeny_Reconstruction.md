@@ -65,6 +65,13 @@ fi;
 done > hmmcleaner_all.log 2>&1
 ```
 
+**Renames orthologs**
+```bash
+for file in N0.*.fasta; do
+    mv "$file" "${file#N0.}"
+done
+```
+
 **Prottest**
 ```bash
 cd /home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/VESPA/prottest
@@ -76,35 +83,111 @@ prottest_setup function: This function is designed to automate the process of id
 
 ```bash
 #!/bin/bash
-# Source directory with input fasta files
-SOURCE_DIR="/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/VESPA/alignment/mafft"
-
-# Target directory for ProtTest setup files
-TARGET_DIR="/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/VESPA/prottest/prottest_setup"
+#SBATCH --job-name=prottest_setup
+#SBATCH --output=./log_%j_%x_out.txt
+#SBATCH --error=./log_%j_%x_err.txt
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --mem=10G
+#SBATCH --time=10:00:00
+#SBATCH --partition=agap_normal
 
 # VESPA script path
 VESPA_SCRIPT="/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/VESPA/prottest/vespa.py"
 
-# Create target directory if it doesn't exist
-mkdir -p "$TARGET_DIR"
+# Process each fasta file
+for fasta_file in *hmm.fasta; do
+    [ ! -f "$fasta_file" ] && continue
 
-# Process each hmm.fasta file
-for fasta_file in "$SOURCE_DIR"/*hmm.fasta; do
-    # Get just the filename without path
-    filename=$(basename "$fasta_file")
-    
-    echo "Processing $filename..."
-    
-    # Run vespa.py command
+    echo "Processing $fasta_file..."
+
+    # Extract HOG ID (e.g. HOG0017898) from the filename
+    hog_id=$(basename "$fasta_file" .fasta | sed 's/.*\(HOG[0-9]\+\).*/\1/')
+
+    # Run vespa.py
     python2 "$VESPA_SCRIPT" prottest_setup -input="$fasta_file"
-    
-    # Copy the generated files to target directory
-    cp -v "ProtTest_Setup_${filename}" "$TARGET_DIR/" 2>/dev/null
-    cp -v "setup_prottest_taskfarm" "$TARGET_DIR/setup_prottest_taskfarm_${filename}" 2>/dev/null
-    
-    # Clean up working directory (optional)
-    rm -f "ProtTest_Setup_${filename}" "setup_prottest_taskfarm"
+
+    # Rename ProtTest directory if exists
+    prot_dir="ProtTest_Setup_${hog_id}_aln_hmm"
+    [ -d "ProtTest_Setup_aln_hmm" ] && mv "ProtTest_Setup_aln_hmm" "$prot_dir"
+
+    # Rename taskfarm file/dir if exists
+    [ -e "setup_prottest_taskfarm" ] && mv "setup_prottest_taskfarm" "setup_prottest_taskfarm_${hog_id}"
+
 done
 
-echo "All files processed and copied to $TARGET_DIR"
+echo "Processing complete."
+```
+
+**Preparing prottest**
+```bash
+#!/bin/bash
+#SBATCH --job-name=prottest_prepare
+#SBATCH --output=prepare_%j.log
+#SBATCH --error=prepare_%j.err
+#SBATCH --partition=agap_normal
+#SBATCH --time=00:10:00
+#SBATCH --mem=2G
+
+# Configuration
+PROTTEST_JAR="/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/VESPA/prottest/prottest-3.4.2/prottest-3.4.2.jar"
+OUTPUT_BASE="/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/VESPA/prottest/prottest_results"
+
+# Process all taskfarm files
+for tf_file in setup_prottest_taskfarm_*; do
+    [ ! -f "$tf_file" ] && continue
+
+    # Extract HOG ID
+    hog_id=$(echo "$tf_file" | sed 's/.*\(HOG[0-9]\+\).*/\1/')
+    
+    # Define paths
+    input_file="ProtTest_Setup_${hog_id}_aln_hmm"
+    output_dir="${OUTPUT_BASE}/${hog_id}/models"
+    
+    # Create output directory
+    mkdir -p "$output_dir"
+    
+    # Write corrected command
+    echo "java -jar $PROTTEST_JAR -i $input_file -o $output_dir -all-distributions" > "$tf_file"
+    echo "Prepared $tf_file -> Output to $output_dir"
+done
+
+echo "Preparation completed. Ready to execute commands."
+```
+
+**Running prottest**
+```bash
+#!/bin/bash
+#SBATCH --job-name=prottest_execute
+#SBATCH --output=execute_%j.log
+#SBATCH --error=execute_%j.err
+#SBATCH --partition=agap_normal
+#SBATCH --time=24:00:00
+#SBATCH --mem=8G
+
+module load bioinfo-cirad
+module load java/jdk-24.0.2
+
+# Execute all commands
+for tf_file in setup_prottest_taskfarm_*; do
+    [ ! -f "$tf_file" ] && continue
+    
+    echo "--------------------------------------------------"
+    echo "Starting processing for $tf_file"
+    echo "Command to execute:"
+    cat "$tf_file"
+    echo "--------------------------------------------------"
+    
+    # Execute the command and log output
+    bash "$tf_file" >> "${tf_file}.log" 2>&1
+    
+    # Check exit status
+    if [ $? -eq 0 ]; then
+        echo "Successfully processed $tf_file"
+    else
+        echo "ERROR processing $tf_file - check ${tf_file}.log"
+    fi
+done
+
+echo "All ProtTest executions completed"
 ```
