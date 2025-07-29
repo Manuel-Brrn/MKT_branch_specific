@@ -7,6 +7,8 @@ assessment, selection, and phylogenetic reconstruction of protein MSAs.
 Commands: metal_compare, prottest_setup, prottest_reader, mrbayes_setup
 ----------------------------------------------------------------------------------
 
+*Alignment Assessment*
+
 **Alignment**
 ```bash
 #!/bin/bash
@@ -72,6 +74,9 @@ for file in N0.*.fasta; do
 done
 ```
 
+*Phylogeny Reconstruction for 4 or more species*
+
+
 **Prottest**
 ```bash
 cd /home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/VESPA/prottest
@@ -81,6 +86,7 @@ tar -xzvf prottest-3.4.2-20160508.tar.gz
 **Empirical model selection functions**
 prottest_setup function: This function is designed to automate the process of identifying the best-fit model of amino acid replacement for a specified protein alignment using the third-party program ProtTest3 [Darriba et al., 2011]. The function is designed to test each amino acid substitution model in both the absence and presence of invariant sites, gamma categories, and a combination of the two.
 
+Empirical_model_selection.sbatch
 ```bash
 #!/bin/bash
 #SBATCH --job-name=prottest_setup
@@ -121,6 +127,7 @@ echo "Processing complete."
 
 **Preparing prottest**
 Correction of paths and creation of directories to run prottest
+prottest_preparation.sbatch
 ```bash
 #!/bin/bash
 #SBATCH --job-name=prottest_prepare
@@ -157,6 +164,7 @@ echo "Preparation completed. Ready to execute commands."
 ```
 
 **Running prottest**
+prottest_run.sbatch
 ```bash
 #!/bin/bash
 #SBATCH --job-name=prottest_execute
@@ -195,4 +203,54 @@ echo "All ProtTest executions completed"
 **prottest_reader**
 The prottest_reader function: 
 This function automates the process of reading the output of ProtTest3. The function creates two output files: best_models.csv and best_supported_models.csv. The best models file reports the best-fit model of amino acid replacement (± rate-heterogeneity) reported by ProtTest3 whereas the best supported file reports the best-fit model of amino acid replacement (± rate-heterogeneity) supported by the third-party phylogenetic reconstruction program MrBayes [Ronquist and Huelsenbeck, 2003]. The two output files are given to enable the user to use different phylogenetic reconstruction software if desired.
+
+*Phylogeny Reconstruction for 3 species*
+
+map_alignments: The map_alignments function is designed to automate the conversion of protein MSAs to nucleotide. This process is mandatory as the codon substitution models of codeML require nucleotide alignments. Protein-MSA guided nucleotide MSAs are generated rather than directly generating nucleotide MSAs because: i) each column within the protein MSA represents aligned codons and therefore avoids aligning incomplete codons or frame-shift mutations, and ii) protein MSAs represent a comparison of the phenotype-producing elements of protein-coding sequences. The function begins by reading the protein MSA to map the non-gap position of each codon within the inferred nucleotide alignment. The sequence of the mapped codons is then inferred using the nucleotide dataset (preferably as a database) from earlier in the pipeline. If the mapping process results in no errors, the respective nucleotide MSA is created. All errors detected by the function will be returned within a separate log file. Please note that the map_alignments function requires the option -database to indicate the nucleotide dataset for correct sequence inference.
+
+**Translate again in nucleotides**
+```bash
+#!/bin/bash
+#SBATCH --job-name=translate
+#SBATCH --output=log_%j_%x.out
+#SBATCH --error=log_%j_%x.err
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --mem=12G
+#SBATCH --time=06:00:00
+#SBATCH --partition=agap_normal
+
+module load bioinfo-cirad
+module load python/2.7.18
+
+INPUT_DIR="/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/VESPA/prottest/alignments_inputs"
+VESPA_SCRIPT="/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/VESPA/prottest/vespa.py"
+CDS_DATABASE="/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/VESPA/cds_sequences/database/translated_all_species.fasta"
+OUTPUT_DIR="/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/VESPA/gene_trees/Map_Gaps_cleaned"
+
+mkdir -p "$OUTPUT_DIR"
+
+# Change to input directory
+cd "$INPUT_DIR" || { echo "Failed to change to directory $INPUT_DIR"; exit 1; }
+
+for fasta_file in *hmm.fasta; do
+    [ ! -f "$fasta_file" ] && continue
+
+    echo "Processing $fasta_file..."
+
+    # Run map_alignments on the file
+    python2 "$VESPA_SCRIPT" map_alignments -input="$fasta_file" -database="$CDS_DATABASE"
+done
+
+echo "Processing complete. Output will be in: $OUTPUT_DIR"
+```
+
+**Species Tree**
+FastTree -wag cleaned.aln.fasta > output.tre
+
+########## infer gene tree
+ pip2 install dendropy
+# create the species tree
+python2 vespa.py infer_genetree -input=nucleotides_MSA.fasta -species_tree=species_tree.nwk
+
 
