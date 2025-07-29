@@ -274,9 +274,49 @@ done
 echo "Traitement terminé. Résultats dans : $OUTPUT_BASE"
 ```
 
-**Species Tree**
-FastTree -wag cleaned.aln.fasta > output.tre
+**Number of alignment kept**
+```bash
+#!/bin/bash
 
+BASE_DIR="/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/VESPA/gene_trees/Map_Gaps_cleaned"
+
+total_hogs=0
+with_files=0
+with_3seq=0
+
+echo "Analyzing HOG directories in $BASE_DIR..."
+
+for hog_dir in "$BASE_DIR"/HOG*/; do
+    ((total_hogs++))
+    hog_id=$(basename "$hog_dir")
+
+    #  Chemin correct vers le fichier généré par VESPA
+    target_dir="${hog_dir}/Map_Gaps_${hog_id}"
+    target_file="${target_dir}/${hog_id}"
+
+    if [ -f "$target_file" ]; then
+        ((with_files++))
+
+        seq_count=$(grep -c '^>' "$target_file" 2>/dev/null || echo 0)
+        if [ "$seq_count" -eq 3 ]; then
+            ((with_3seq++))
+        fi
+    fi
+done
+
+echo "=== Analysis Results ==="
+echo "Total HOG directories processed: $total_hogs"
+echo "HOGs with alignment files: $with_files"
+echo "HOGs with files containing exactly 3 sequences: $with_3seq"
+echo "Detailed breakdown:"
+echo "- HOGs with 0-2 sequences: $((with_files - with_3seq))"
+echo "- HOGs with exactly 3 sequences: $with_3seq"
+```
+
+**Species Tree**
+```bash
+FastTree -wag cleaned.aln.fasta > output.tre
+```
 ########## infer gene tree
  pip2 install dendropy
 # create the species tree
