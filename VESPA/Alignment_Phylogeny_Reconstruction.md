@@ -120,7 +120,7 @@ echo "Processing complete."
 ```
 
 **Preparing prottest**
-Correction of paths and creattion of directories to run prottest
+Correction of paths and creation of directories to run prottest
 ```bash
 #!/bin/bash
 #SBATCH --job-name=prottest_prepare
