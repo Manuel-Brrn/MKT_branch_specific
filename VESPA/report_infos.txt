@@ -4,5 +4,12 @@ urartu cds after cleaning: 57 293
 Monococcum cds before cleaning: 42 811
 Monococcum cds after cleaning: 38 425
 
+Mutica cds before cleaning : 122 596
+Mutica cds before cleaning :
+
+Speltoides cds before cleaning :
+Speltoides cds before cleaning :
+
+
 Hordeum cds before cleaning: 39 179
 Hordeum cds after cleaning: 38 962
