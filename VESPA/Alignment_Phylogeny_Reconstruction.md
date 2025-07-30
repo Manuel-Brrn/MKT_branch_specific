@@ -365,9 +365,28 @@ echo "Total 3-sequence alignments processed: $total_processed"
 echo "Tree files (.tre) are in their respective Map_Gaps_HOG*/ directories"
 ```
 
-########## infer gene tree
+**Gene tree inference function**
+The -infer_genetree function is designed to automate the creation of the corresponding gene tree for a user-specified MSA. This is achieved by associating the taxa specified on a user-defined species tree with the headers created by ‘label_filename’ and infer_ensembl_species within the MSA. The function operates by first creating a copy of the species tree with the species names. The species tree is designated using the required species_tree option. The species names are then replaced with their associated MSA headers. If any species names remain after this phase, the taxa and their respective branches are removed from the tree to create the finished gene tree. It should be noted that the infer_genetree function incorporates the non-standard python library dendropy [Sukumaran et al., 2010].
+The infer_genetree function in VESPA is mapping existing MSA sequences onto a predefined species tree through a process called tree reconciliation. 
+Core Functionality
+    Inputs:
+        A multiple sequence alignment (MSA) with headers formatted by label_filename/infer_ensembl_species
+        A user-provided species tree (divergence relationships of species/taxa)
+
+    Output: A gene tree topology constrained by the species tree.
+
+**Species tree**
+
+Orthofinder repertory:
+/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/VESPA/cds_sequences/database/orthofinder_input/OrthoFinder/Results_Jul23_1/Species_Tree
+
+ SpeciesTree_rooted.txt
+(translated_hordeum_renamed:0.5,(translated_urartu_renamed:1,translated_monococcum_renamed:1)1:0.
+
+
+```bash
  pip2 install dendropy
 # create the species tree
 python2 vespa.py infer_genetree -input=nucleotides_MSA.fasta -species_tree=species_tree.nwk
-
+```
 
