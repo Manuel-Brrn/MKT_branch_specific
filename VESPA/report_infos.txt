@@ -10,6 +10,5 @@ Mutica cds before cleaning : 122 075
 Speltoides cds before cleaning : 46 344
 Speltoides cds before cleaning : 45 644
 
-
 Hordeum cds before cleaning: 39 179
 Hordeum cds after cleaning: 38 962
