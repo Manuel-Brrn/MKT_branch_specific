@@ -320,49 +320,49 @@ echo "- HOGs with exactly 3 sequences: $with_3seq"
 #SBATCH --output=fasttree_%j.out
 #SBATCH --error=fasttree_%j.err
 #SBATCH --partition=agap_normal
-#SBATCH --time=20:00:00
-#SBATCH --mem=8G
+#SBATCH --time=02:00:00
+#SBATCH --mem=4G
 #SBATCH --cpus-per-task=1
 
 module load bioinfo-cirad
 module load fasttree/2.1.11
 
 BASE_DIR="/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/VESPA/gene_trees/Map_Gaps_cleaned"
-OUTPUT_DIR="$BASE_DIR/fasttree_results"  # New directory for trees
-
-mkdir -p "$OUTPUT_DIR"
-
 total_processed=0
 
-echo "Searching for files with exactly 3 sequences..."
+echo "Processing 3-sequence alignments with FastTree..."
 
 for hog_dir in "$BASE_DIR"/HOG*/; do
     hog_id=$(basename "$hog_dir")
     target_file="${hog_dir}/Map_Gaps_${hog_id}/${hog_id}"
+    output_tree="${hog_dir}/Map_Gaps_${hog_id}/${hog_id}.tre"
 
     if [ -f "$target_file" ]; then
         seq_count=$(grep -c '^>' "$target_file" 2>/dev/null || echo 0)
 
         if [ "$seq_count" -eq 3 ]; then
-            echo "Processing $hog_id..."
+            echo "Building tree for $hog_id..."
             
-            # Run FastTree with -wag model
-            FastTree -wag "$target_file" > "$OUTPUT_DIR/${hog_id}.tre" 2> "$OUTPUT_DIR/${hog_id}.log"
+            # Run FastTree directly in the target directory
+            (
+                cd "${hog_dir}/Map_Gaps_${hog_id}" && \
+                FastTree -wag "$hog_id" > "${hog_id}.tre" 2> "${hog_id}.fasttree.log"
+            )
             
-            # Verify the tree was created
-            if [ -s "$OUTPUT_DIR/${hog_id}.tre" ]; then
+            # Verify output
+            if [ -s "$output_tree" ]; then
                 ((total_processed++))
-                echo " Success: $hog_id"
+                echo "Generated: ${hog_id}.tre"
             else
-                echo " Failed: $hog_id (check ${hog_id}.log)"
+                echo "Failed: ${hog_id} (check Map_Gaps_${hog_id}/${hog_id}.fasttree.log)"
             fi
         fi
     fi
 done
 
-echo "=== FastTree Results ==="
-echo "Total 3-sequence files processed: $total_processed"
-echo "Output trees in: $OUTPUT_DIR"
+echo "=== FastTree Completion ==="
+echo "Total 3-sequence alignments processed: $total_processed"
+echo "Tree files (.tre) are in their respective Map_Gaps_HOG*/ directories"
 ```
 
 ########## infer gene tree
