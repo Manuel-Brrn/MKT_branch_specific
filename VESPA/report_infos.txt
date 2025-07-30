@@ -5,10 +5,10 @@ Monococcum cds before cleaning: 42 811
 Monococcum cds after cleaning: 38 425
 
 Mutica cds before cleaning : 122 596
-Mutica cds before cleaning :
+Mutica cds before cleaning : 122 075
 
-Speltoides cds before cleaning :
-Speltoides cds before cleaning :
+Speltoides cds before cleaning : 46 344
+Speltoides cds before cleaning : 45 644
 
 
 Hordeum cds before cleaning: 39 179
