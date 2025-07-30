@@ -346,7 +346,7 @@ for hog_dir in "$BASE_DIR"/HOG*/; do
             # Run FastTree directly in the target directory
             (
                 cd "${hog_dir}/Map_Gaps_${hog_id}" && \
-                FastTree -wag "$hog_id" > "${hog_id}.tre" 2> "${hog_id}.fasttree.log"
+                FastTree -nt -gtr -gamma "$hog_id" > "${hog_id}.tre" 2> "${hog_id}.fasttree.log"
             )
             
             # Verify output
