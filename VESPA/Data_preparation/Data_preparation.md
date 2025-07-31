@@ -45,10 +45,10 @@ sed -E 's/^>([^ ]+).*/>Ae_mutica|\1/' Cleaned_Ammut_EIv1.0.release_cds_clean.fas
 **Cd-hit**
 CD-HIT (Cluster Database at High Identity with Tolerance) is a widely-used and fast clustering program designed for comparing and clustering large sets of protein or nucleotide sequences. It is especially popular in bioinformatics pipelines for removing redundancy from datasets, such as after assembling transcriptomes or downloading large protein datasets from databases like UniProt.
 
-    Reduce Redundancy: Collapse highly similar sequences into representative clusters.
-    Speed Up Downstream Analyses: Reduces dataset size for alignment, annotation, etc.
-    Dereplication: Ensures only unique (or representative) sequences remain.
-    Preprocessing step in metagenomics, proteomics, transcriptomics, etc.
+Reduce Redundancy: Collapse highly similar sequences into representative clusters.
+Speed Up Downstream Analyses: Reduces dataset size for alignment, annotation, etc.
+Dereplication: Ensures only unique (or representative) sequences remain.
+Preprocessing step in metagenomics, proteomics, transcriptomics, etc.
 
  Advantages of CD-HIT
     Speed:
