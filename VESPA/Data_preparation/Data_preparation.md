@@ -33,6 +33,10 @@ python2 vespa.py translate -input=Cleaned_TA299-HC-cds_v1.1.renamed.fasta -cleav
 ```bash
 sed -E 's/^>([^ ]+).*/>Ae_speltoides|\1/' Cleaned_speltoides_CDS.fasta > Cleaned_speltoides_CDS_renamed.fasta
 ```
+#### **Mutica**
+```bash
+sed -E 's/^>([^ ]+).*/>Ae_mutica|\1/' Cleaned_Ammut_EIv1.0.release_cds_clean.fasta > Cleaned_Ammut_EIv1.0.release_cds_clean_renamed.fasta
+```
 #### **Hordeum**
 ```bash
  sed -E 's/^>Hordeum_vulgare_([^ ]+) gene=.*/>H_vulgare|\1/' Translated_Cleaned_hordeum_full_CDS.fasta > translated_hordeum_renamed.fasta
