@@ -50,25 +50,20 @@ Speed Up Downstream Analyses: Reduces dataset size for alignment, annotation, et
 Dereplication: Ensures only unique (or representative) sequences remain.
 Preprocessing step in metagenomics, proteomics, transcriptomics, etc.
 
- Advantages of CD-HIT
-    Speed:
-        CD-HIT is extremely fast because of its short word filter and greedy incremental clustering method.
-        Optimized for large-scale sequence datasets (e.g., millions of sequences).
-
-    Memory Efficiency:
-        Designed to handle large datasets even on machines with modest memory.
-
-    Customizable Identity Thresholds:
-        Users can specify sequence identity thresholds (e.g., -c 0.9 for 90% identity) to control clustering stringency.
-
-    Supports Protein and Nucleotide Sequences:
-        cd-hit for proteins.
-        cd-hit-est for nucleotide sequences.
-
-    Multiple Output Options:
-
-        Clustered representative sequences.
-        Cluster membership files for downstream analysis.
+Advantages of CD-HIT
+Speed:
+CD-HIT is extremely fast because of its short word filter and greedy incremental clustering method.
+Optimized for large-scale sequence datasets (e.g., millions of sequences).
+Memory Efficiency:
+Designed to handle large datasets even on machines with modest memory.
+Customizable Identity Thresholds:
+Users can specify sequence identity thresholds (e.g., -c 0.9 for 90% identity) to control clustering stringency.
+Supports Protein and Nucleotide Sequences:
+cd-hit for proteins.
+cd-hit-est for nucleotide sequences.
+Multiple Output Options:
+Clustered representative sequences.
+Cluster membership files for downstream analysis.
 
 As mutica contains a lot of transcript I used cd-hit to remove any higly similar sequences
 
