@@ -345,7 +345,7 @@ fi
 
 **Add the reference sequence of the focal species:**
 
-1/ Extracts sequences from a FASTA file based on contig IDs using parallel processing.
+**Extracts sequences from a FASTA file based on contig IDs using parallel processing.**
 otbain : contigs_ID.txt ; list of genes to be extracted
 ```bash
 grep ">" urartu_covered_cds.cds | cut -d "|" -f1 | sed 's/^>//' | uniq > contigs_ID.txt
@@ -426,7 +426,7 @@ fi
 
 echo "Script completed."
 ```
-2/ Add the reference CDS sequences to each file 
+**Add the reference CDS sequences to each file**
 This SLURM script matches contig sequences from input FASTA files with their corresponding CDS sequences and combines them into output files.
 It processes files in parallel for efficiency.
 
@@ -448,7 +448,7 @@ Processing Steps
 2. Runs in parallel using all allocated CPUs
 3. Provides summary statistics upon completion
 
-## Usage
+Usage
 ```bash
 sbatch add_reference_sequence_all_genes.sbatch <input_fastas_dir> <cds_file> <output_dir>
 ```
@@ -617,10 +617,102 @@ fi
 exit 0
 ```
 
-Change the order of the reference sequence name to run MACSE:
+**Change the reference sequence name to run MACSE:**
 ```bash
 for file in *.fasta; do
     sed -i 's/^>T_urartu|\(.*\)/>\1|T_urartu/' "$file"
 done
 ```
 Adapt ">T_urartu" to the species name
+
+**Merge the sequences to run MACSE:**
+A Slurm batch script for concatenating multiple FASTA files into a single output file.
+- Merges multiple FASTA files efficiently using `seqkit`
+
+Usage:
+```bash
+sbatch merge_sequences.sbatch <input_directory> <output_filename>
+```
+
+merging_sequences.sbatch
+```bash
+#!/bin/bash
+#SBATCH --job-name=fasta_merger
+#SBATCH --output=./%x_%j_out.txt
+#SBATCH --error=./%x_%j_err.txt
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=20G  # Reduced from 80G since we're using cat
+#SBATCH --time=6:00:00  # Reduced time estimate
+#SBATCH --partition=agap_normal
+
+echo "========================================"
+echo "Starting FASTA Merger (cat version)"
+echo "Date: $(date)"
+echo "========================================"
+
+# Check arguments
+if [ "$#" -ne 2 ]; then
+    echo "ERROR: Missing arguments!"
+    echo "Usage: $0 <input_directory> <output_filename>"
+    echo "Example: $0 /path/to/fastas merged.fasta"
+    exit 1
+fi
+
+INPUT_DIR="$1"
+OUTPUT_FILE="$2"
+
+echo "Input directory: ${INPUT_DIR}"
+echo "Output file: ${OUTPUT_FILE}"
+echo ""
+
+# Verify input directory
+if [ ! -d "${INPUT_DIR}" ]; then
+    echo "ERROR: Input directory does not exist!"
+    exit 1
+fi
+
+# Count and verify input files
+INPUT_COUNT=$(find "${INPUT_DIR}" -maxdepth 1 -name "*.fasta" | wc -l)
+if [ "${INPUT_COUNT}" -eq 0 ]; then
+    echo "ERROR: No .fasta files found in input directory!"
+    exit 1
+fi
+echo "Found ${INPUT_COUNT} .fasta files to merge"
+echo ""
+
+# Merge using cat (memory efficient)
+echo "Starting merge with cat..."
+START_TIME=$(date +%s)
+
+# Create empty output file first
+> "${OUTPUT_FILE}"
+
+# Process files one by one to avoid argument list too long errors
+find "${INPUT_DIR}" -maxdepth 1 -name "*.fasta" -print0 | while IFS= read -r -d '' file; do
+    echo "Adding ${file} to merge..."
+    cat "${file}" >> "${OUTPUT_FILE}"
+done
+
+# Verify output
+if [ $? -eq 0 ] && [ -s "${OUTPUT_FILE}" ]; then
+    END_TIME=$(date +%s)
+    RUNTIME=$((END_TIME-START_TIME))
+    echo ""
+    echo "SUCCESS: Merged ${INPUT_COUNT} files in ${RUNTIME} seconds!"
+    echo "Output file: ${OUTPUT_FILE}"
+    echo "Size: $(ls -lh "${OUTPUT_FILE}" | awk '{print $5}')"
+    echo "Sequences: $(grep -c "^>" "${OUTPUT_FILE}")"
+else
+    echo ""
+    echo "ERROR: Merge failed!"
+    exit 1
+fi
+
+echo ""
+echo "========================================"
+echo "FASTA Merger completed"
+echo "Date: $(date)"
+echo "========================================"
+```
+
