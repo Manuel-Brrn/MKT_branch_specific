@@ -42,6 +42,54 @@ sed -E 's/^>([^ ]+).*/>Ae_mutica|\1/' Cleaned_Ammut_EIv1.0.release_cds_clean.fas
  sed -E 's/^>Hordeum_vulgare_([^ ]+) gene=.*/>H_vulgare|\1/' Translated_Cleaned_hordeum_full_CDS.fasta > translated_hordeum_renamed.fasta
 ```
 
+**Cd-hit**
+CD-HIT (Cluster Database at High Identity with Tolerance) is a widely-used and fast clustering program designed for comparing and clustering large sets of protein or nucleotide sequences. It is especially popular in bioinformatics pipelines for removing redundancy from datasets, such as after assembling transcriptomes or downloading large protein datasets from databases like UniProt.
+
+    Reduce Redundancy: Collapse highly similar sequences into representative clusters.
+    Speed Up Downstream Analyses: Reduces dataset size for alignment, annotation, etc.
+    Dereplication: Ensures only unique (or representative) sequences remain.
+    Preprocessing step in metagenomics, proteomics, transcriptomics, etc.
+
+ Advantages of CD-HIT
+    Speed:
+        CD-HIT is extremely fast because of its short word filter and greedy incremental clustering method.
+        Optimized for large-scale sequence datasets (e.g., millions of sequences).
+
+    Memory Efficiency:
+        Designed to handle large datasets even on machines with modest memory.
+
+    Customizable Identity Thresholds:
+        Users can specify sequence identity thresholds (e.g., -c 0.9 for 90% identity) to control clustering stringency.
+
+    Supports Protein and Nucleotide Sequences:
+        cd-hit for proteins.
+        cd-hit-est for nucleotide sequences.
+
+    Multiple Output Options:
+
+        Clustered representative sequences.
+        Cluster membership files for downstream analysis.
+
+As mutica contains a lot of transcript I used cd-hit to remove any higly similar sequences
+
+ cd_hit.sbatch
+```bash
+#!/bin/bash
+#SBATCH --job-name=cd_hit
+#SBATCH --output=./log_%j_%x_out.txt
+#SBATCH --error=./log_%j_%x_err.txt
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --mem=10G
+#SBATCH --time=10:00:00
+#SBATCH --partition=agap_normal
+
+module load bioinfo-cirad
+module load cd-hit/4.8.1
+
+cd-hit -i Cleaned_Ammut_EIv1.0.release_cds.fasta -o Cleaned_Ammut_EIv1.0.release_cds_clean.fasta -c 1.0
+```
+
  ### **create_database for Blast**
 The create_database function was designed for users to concatenate multiple genomes into the single database required for homology searching. The function operates by building the database a single sequence at a time.
 Converts a FASTA file into a searchable BLAST database, allowing to:
