@@ -617,3 +617,10 @@ fi
 exit 0
 ```
 
+Change the order of the reference sequence name to run MACSE:
+```bash
+for file in *.fasta; do
+    sed -i 's/^>T_urartu|\(.*\)/>\1|T_urartu/' "$file"
+done
+```
+Adapt ">T_urartu" to the species name
