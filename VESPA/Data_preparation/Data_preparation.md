@@ -69,7 +69,7 @@ Multiple Output Options:
 Clustered representative sequences.
 Cluster membership files for downstream analysis.
 
-As mutica contains a lot of transcript I used cd-hit to remove any higly similar sequences
+As mutica contains a lot of transcript I used cd-hit to remove any higly similar sequences.
 
  cd_hit.sbatch
 ```bash
