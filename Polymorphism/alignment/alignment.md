@@ -205,3 +205,11 @@ outfile.close()
 print ("Done, %i RBH found" % count)
 ```
 
+**Processing of the RBH.tab (Tr.urartu - Ho.spontaneum)**
+```bash
+awk -F'\t' -v OFS='\t' 'NR>1 {gsub("T_urartu\\|","",$1); gsub("\\.","_",$1); print}' RBH.tab > RBH_processed.tab
+```
+
+
+
+
