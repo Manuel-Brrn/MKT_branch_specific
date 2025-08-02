@@ -376,6 +376,109 @@ echo "Done. Missing entries logged in: $MISSING_LOG"
 
 Alignment with Macse: 
 
+```bash
+#!/bin/bash
+
+# Load necessary modules
+module load bioinfo-cirad
+module load java/jre1.8.0_31
+
+# Path to MACSE JAR
+MACSE_JAR="/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/03_scripts/dn_ds_pipeline/MACSE/macse_v1.2.jar"
+
+# Output directory
+ALIGN_DIR="macse_alignments"
+mkdir -p "$ALIGN_DIR"
+
+# MACSE alignment parameters (you can change these if needed)
+THREADS=4                         # Number of threads
+GENETIC_CODE=1                   # NCBI genetic code table (1 = standard)
+FRAMESHIFT_MODE="keep"          # How to handle frameshifts: keep | remove | correct
+JAVA_MEM=2000m                  # Java max memory in MB
+
+# Penalty costs
+FSC=30                          # Frameshift cost
+SC=100                          # Stop codon cost
+GAPC=7                          # Gap creation cost
+GAPE=1                          # Gap extension cost
+
+# Less-reliable sequences penalty
+FSC_LR=10
+SC_LR=60
+
+# Process each .fasta file
+for file in *.fasta; do
+    base=$(basename "$file" .fasta)
+
+    echo "Aligning $file with MACSE..."
+
+    java -Xmx"$JAVA_MEM" -jar "$MACSE_JAR" \
+        -prog alignSequences \
+        -seq "$file" \
+        -out_NT "${ALIGN_DIR}/${base}_aligned_NT.fasta" \
+        -out_AA "${ALIGN_DIR}/${base}_aligned_AA.fasta" \
+        -thread "$THREADS" \
+        -code "$GENETIC_CODE" \
+        -shift "$FRAMESHIFT_MODE" \
+        -fsc "$FSC" \
+        -sc "$SC" \
+        -gapc "$GAPC" \
+        -gape "$GAPE" \
+        -fsc_lr "$FSC_LR" \
+        -sc_lr "$SC_LR" \
+        -del yes
+
+    echo "Alignment complete for: $file"
+done
+
+echo "All alignments stored in: $ALIGN_DIR"
+```
+
+**Core Configuration**
+Parameter	Value	Explanation
+-thread	4	Number of CPU threads for parallel processing.
+-code	1	NCBI Genetic Code Table 1 (standard eukaryotic code). Other codes: 2 (vertebrate mitochondrial), 11 (bacterial), etc.
+-shift	keep	How to handle frameshifts:
+- keep: Preserve frameshifts as gaps (---).
+- remove: Delete sequences with frameshifts.
+- correct: Attempt to fix frameshifts.
+-Xmx	2000m	Java heap memory (2GB). Increase (e.g., 4000m) for large datasets.
+
+**Penalty Costs (Critical for Alignment Quality)**
+A. Standard Penalties
+Parameter	Value	Role in Alignment
+-fsc	30	Frameshift cost: Penalty for introducing a frameshift (higher = fewer frameshifts).
+-sc	100	Stop codon cost: Penalty for aligning a stop codon (*) in the middle of a sequence.
+-gapc	7	Gap creation cost: Penalty for opening a gap (higher = fewer gaps).
+-gape	1	Gap extension cost: Penalty for extending a gap (lower = longer gaps allowed).
+
+B. Less-Reliable (LR) Sequence Penalties
+Parameter	Value	Purpose
+-fsc_lr	10	Lower frameshift penalty for unreliable sequences (e.g., low-quality data).
+-sc_lr	60	Lower stop codon penalty for unreliable sequences.
+
+    Standard penalties (-fsc, -sc) apply to high-confidence regions.
+    LR penalties (-fsc_lr, -sc_lr) relax constraints for ambiguous regions, preventing over-penalization.
+
+**Output Options**
+Parameter	Output File	Content
+-out_NT	*_aligned_NT.fasta	Nucleotide alignment (frameshifts as gaps).
+-out_AA	*_aligned_AA.fasta	Amino acid alignment (stop codons as *).
+-del	yes	Delete temporary files.
+
+**Biological Interpretation of Penalties**
+Frameshifts (-fsc)
+    High cost (30): Favors alignments with fewer frameshifts.
+    Example: A sequence with a frameshift mutation will be heavily penalized unless the mutation is biologically real.
+
+Stop Codons (-sc)
+    Very high cost (100): Strongly discourages internal stop codons (likely sequencing errors).
+    Exception: Lower penalty (-sc_lr 60) for low-quality regions.
+
+Gaps (-gapc, -gape)
+    Gap creation (7) > extension (1): Favors fewer but longer gaps (common in evolutionary alignments).
+
+
 
 
 
