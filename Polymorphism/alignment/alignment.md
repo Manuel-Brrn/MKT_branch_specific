@@ -212,7 +212,7 @@ awk -F'\t' -v OFS='\t' 'NR>1 {gsub("T_urartu\\|","",$1); gsub("\\.","_",$1); pri
 
 **Alignment**
 
-*dNdSpiNpiS alignment*
+*dNdSpiNpiS input*
 MACSE Alignment Pipeline
 
 **Extracts sequences from a FASTA file based on contig IDs using parallel processing.**
@@ -299,7 +299,6 @@ echo "Script completed."
 
 
 **Add the outgroup sequence to the multi fasta**
-
 The script adds the outgroup sequence to each multi-fasta contig, and copy them to an input directory for aligning. Provides a log file with the contigs with no orthologs.
 
 ```bash
@@ -310,73 +309,21 @@ The script adds the outgroup sequence to each multi-fasta contig, and copy them 
 ```
 
 ```bash
-#!/bin/bash
 
-# ----------------------------
-# Usage and argument parsing
-# ----------------------------
-if [ "$#" -ne 3 ]; then
-    echo "Usage: $0 <RBH_table> <H_vulgare_fasta> <destination_directory>"
-    echo "Example:"
-    echo "  $0 RBH_table.txt hvulgare_CDS.fasta /path/to/output"
-    exit 1
-fi
-
-RBH_TAB="$1"
-H_VULGARE_FASTA="$2"
-DEST_DIR="$3"
-
-# ----------------------------
-# Logging
-# ----------------------------
-MISSING_LOG="missing_orthologs.txt"
-> "$MISSING_LOG"  # Clear log
-
-# ----------------------------
-# Index H. vulgare FASTA if not indexed
-# ----------------------------
-if [ ! -f "$H_VULGARE_FASTA.fai" ]; then
-    echo "Indexing H. vulgare FASTA..."
-    module load seqkit 2>/dev/null || echo "Make sure seqkit is available!"
-    seqkit faidx "$H_VULGARE_FASTA"
-fi
-
-# ----------------------------
-# Process Urartu FASTA files in current directory
-# ----------------------------
-for fasta in *.fasta; do
-    gene_id=$(basename "$fasta" .fasta)
-
-    # Get H. vulgare ortholog ID from RBH table
-    h_ortholog=$(awk -v id="$gene_id" '$1 == id { print $2 }' "$RBH_TAB")
-
-    if [[ -z "$h_ortholog" ]]; then
-        echo "No ortholog found in RBH for $gene_id" | tee -a "$MISSING_LOG"
-        continue
-    fi
-
-    # Extract sequence ID after '|'
-    h_seq_id=$(echo "$h_ortholog" | cut -d'|' -f2)
-
-    # Extract ortholog sequence
-    if ! seqkit faidx "$H_VULGARE_FASTA" "$h_seq_id" > tmp_seq.fa 2>/dev/null; then
-        echo "Ortholog $h_seq_id not found in FASTA for $gene_id" | tee -a "$MISSING_LOG"
-        continue
-    fi
-
-    # Append ortholog to FASTA
-    cat tmp_seq.fa >> "$fasta"
-    echo "Appended $h_seq_id to $fasta"
-
-    #  Copy updated file to destination
-    cp "$fasta" "$DEST_DIR/"
-
-    # Clean up
-    rm -f tmp_seq.fa
-done
-
-echo "Done. Missing entries logged in: $MISSING_LOG"
 ```
+
+
+
+Alignment with Macse: 
+
+
+
+
+
+
+
+
+
 
 
 
