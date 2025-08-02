@@ -215,131 +215,171 @@ awk -F'\t' -v OFS='\t' 'NR>1 {gsub("T_urartu\\|","",$1); gsub("\\.","_",$1); pri
 *dNdSpiNpiS alignment*
 MACSE Alignment Pipeline
 
-## Description
-This pipeline performs pairwise alignment of ORF sequences using MACSE with reciprocal best hits (RBH) as input.
+**Extracts sequences from a FASTA file based on contig IDs using parallel processing.**
+otbain : contigs_ID.txt ; list of genes to be extracted
+```bash
+grep ">" urartu_covered_cds.cds | cut -d "|" -f1 | sed 's/^>//' | uniq > contigs_ID.txt
+```
 
 ## Usage
 ```bash
- sbatch alignment.sbatch \
-    <ORF_alignment_1.fasta> \
-    <ORF_alignment_2.fasta> \
-    <RBH_table.tab> \
-    <output_directory>
+sbatch extract_sequences.sbatch <output_directory> <fasta_file_path>
 ```
 
-#Arguments
-Parameter           Description                 Example
-ORF_alignment_1     First set of ORF sequences  speltoides_merged_bams.cds
-ORF_alignment_2     Second set of ORF sequences hordeum_full_CDS_modified.fasta
-RBH_table           Reciprocal best hits table  RBH_filtered_modified.tab
-output_directory    Directory for results       ./alignment_results/
-
-
- Macse_alignment.sbatch
+extract_sequences_per_contig.sbatch
 ```bash
 #!/bin/bash
-#SBATCH --job-name=alignment_MACSE
-#SBATCH --output=./log_%j_%x_out.txt
-#SBATCH --error=./log_%j_%x_err.txt
-#SBATCH --nodes=1
-#SBATCH --ntasks-per-node=1
-#SBATCH --mem=20G
-#SBATCH --time=50:00:00
-#SBATCH --partition=agap_long
+#SBATCH --job-name=sequences_extraction             # Job name for Slurm
+#SBATCH --output=./log_%j_%x_out.txt                # Log file for standard output
+#SBATCH --error=./log_%j_%x_err.txt                 # Log file for standard error
+#SBATCH --nodes=1                                   # Number of nodes
+#SBATCH --cpus-per-task=20
+#SBATCH --mem=10G                                   # Memory allocation
+#SBATCH --time=10:00:00                             # Time limit
+#SBATCH --partition=agap_normal                     # Job queue/partition
 
-echo "Starting alignment job at $(date)"
-echo "Job ID: $SLURM_JOB_ID"
-
-### Check command-line arguments
-if [ "$#" -ne 4 ]; then
-    echo "Error: Missing required arguments."
-    echo "Usage: $0 <ORF_alignment_1> <ORF_alignment_2> <RBH_tab> <output_dir>"
+# Check if required arguments are provided
+if [ "$#" -ne 2 ]; then
+    echo "Usage: $0 <output_directory> <fasta_file_path>"
+    echo "Example: $0 /home/barrientosm/scratch/test/speltoides /path/to/modified_2.fasta"
     exit 1
 fi
 
-ORF_ALIGNMENT_1="$1"
-ORF_ALIGNMENT_2="$2"
-RBH_TAB="$3"
-OUTPUT_DIR="$4"
-
-echo "Input parameters:"
-echo "- ORF alignment 1: $ORF_ALIGNMENT_1"
-echo "- ORF alignment 2: $ORF_ALIGNMENT_2"
-echo "- RBH table: $RBH_TAB"
-echo "- Output directory: $OUTPUT_DIR"
-
-### Setup working directory
-echo "Setting up working directory..."
-cd "$OUTPUT_DIR" || { echo "Error: Failed to change to output directory"; exit 1; }
-
-### Load modules
 echo "Loading required modules..."
 module load bioinfo-cirad
-module load snakemake/7.32.4-conda
+module load seqkit/2.8.1
+module load parallel/20220922
+echo "Modules loaded successfully."
 
-### Conda environment setup
-echo "Setting up Conda environment..."
-source /nfs/work/agap_id-bin/img/snakemake/7.32.4/etc/profile.d/conda.sh
-conda activate base
+# Define output directory and input FASTA file from command line arguments
+export OUTPUT_DIR="$1"
+export FASTA_FILE="$2"
 
-### Check/create environment
-echo "Checking for bioperl_env..."
-if ! conda env list | grep -q "bioperl_env"; then
-    echo "Creating bioperl_env..."
-    conda create -y -n bioperl_env perl-bioperl -c bioconda
-fi
+echo "Output directory set to: $OUTPUT_DIR"
+echo "FASTA file set to: $FASTA_FILE"
 
-echo "Activating bioperl_env..."
-conda activate bioperl_env
+# Create the output directory if it doesn't exist
+echo "Creating output directory if it doesn't exist..."
+mkdir -p "$OUTPUT_DIR"
+echo "Output directory ready."
 
-### Perl environment setup
-echo "Setting up Perl environment..."
-if ! command -v cpanm &> /dev/null; then
-    echo "Installing cpanm..."
-    curl -L https://cpanmin.us | perl - App::cpanminus
-fi
+# Extract unique contig IDs from FASTA headers and remove leading ">"
+echo "Extracting unique contig IDs from FASTA headers..."
+grep "^>" "$FASTA_FILE" | cut -d"|" -f1 | sed 's/^>//' | sort | uniq > contigs_ID.txt
+echo "Contig IDs written to contigs_ID.txt"
 
-if [[ ! "$PATH" =~ "$HOME/perl5/bin" ]]; then
-    export PATH="$HOME/perl5/bin:$PATH"
-fi
-
-if ! perl -MSwitch -e 'print "Switch module is installed\n"' 2>/dev/null; then
-    echo "Installing Switch module..."
-    cpanm Switch
-fi
-
-### Verify BioPerl
-echo "Verifying BioPerl installation..."
-perl -MBio::SeqIO -e 'print "BioPerl works!\n"' || {
-    echo "Error: BioPerl test failed!" >&2
-    exit 1
+# Define the function to process a single contig
+process_contig() {
+    contig="$1"
+    echo "Processing contig: $contig"
+    seqkit grep -r -p "$contig" "$FASTA_FILE" -o "${OUTPUT_DIR}/${contig}.fasta"
+    if [ $? -eq 0 ]; then
+        echo "Successfully processed contig: $contig"
+    else
+        echo "Error processing contig: $contig" >&2
+    fi
 }
+export -f process_contig
 
-### Set Perl library path
-#export PERL5LIB="/storage/simple/users/barrientosm/.conda/envs/bioperl_env/lib/perl5/site_perl:$HOME/perl5/lib/perl5:$PERL5LIB"
-export PERL5LIB="/home/barrientosm/my_perl_5.36.0/lib/site_perl/5.36.0:/home/barrientosm/my_perl_5.36.0/lib/site_perl/5.36.0/x86"
-echo "PERL5LIB set to: $PERL5LIB"
+echo "Starting parallel processing of contigs..."
+# Run in parallel, processing max 20 contigs at the same time
+unset PERL5LIB
+cat contigs_ID.txt | parallel -j 20 --joblog "${OUTPUT_DIR}/parallel_joblog.txt" process_contig {}
 
-### Run alignment
-echo "Starting MACSE alignment..."
-echo "Command: perl AlignTwoProfiles_wrapper_macse_v1_2_modified.pl -clean yes -p1 $ORF_ALIGNMENT_1 -p2 $ORF_ALIGNMENT_2 -rbh $RBH_TAB"
-
-/storage/simple/users/barrientosm/.conda/envs/bioperl_env/bin/perl \
-    /home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/MACSE/AlignTwoProfiles_wrapper_macse_v1_2_modified.pl \
-    -clean yes \
-    -p1 "$ORF_ALIGNMENT_1" \
-    -p2 "$ORF_ALIGNMENT_2" \
-    -rbh "$RBH_TAB"
-
-### Check exit status
+# Check if parallel completed successfully
 if [ $? -eq 0 ]; then
-    echo "Alignment completed successfully at $(date)"
-    echo "Results saved in: $OUTPUT_DIR"
+    echo "All contigs processed successfully."
 else
-    echo "Error: Alignment failed!" >&2
+    echo "Error: Some contigs failed to process. Check the logs for details."
     exit 1
 fi
+
+echo "Script completed."
 ```
+
+
+**Add the outgroup sequence to the multi fasta**
+
+The script adds the outgroup sequence to each multi-fasta contig, and copy them to an input directory for aligning. Provides a log file with the contigs with no orthologs.
+
+```bash
+ ./add_outgroup.sh \
+    /path/to/RBH_table.txt \
+    /path/to/hvulgare_CDS.fasta \
+    /path/to/output_dir/
+```
+
+```bash
+#!/bin/bash
+
+# ----------------------------
+# Usage and argument parsing
+# ----------------------------
+if [ "$#" -ne 3 ]; then
+    echo "Usage: $0 <RBH_table> <H_vulgare_fasta> <destination_directory>"
+    echo "Example:"
+    echo "  $0 RBH_table.txt hvulgare_CDS.fasta /path/to/output"
+    exit 1
+fi
+
+RBH_TAB="$1"
+H_VULGARE_FASTA="$2"
+DEST_DIR="$3"
+
+# ----------------------------
+# Logging
+# ----------------------------
+MISSING_LOG="missing_orthologs.txt"
+> "$MISSING_LOG"  # Clear log
+
+# ----------------------------
+# Index H. vulgare FASTA if not indexed
+# ----------------------------
+if [ ! -f "$H_VULGARE_FASTA.fai" ]; then
+    echo "Indexing H. vulgare FASTA..."
+    module load seqkit 2>/dev/null || echo "Make sure seqkit is available!"
+    seqkit faidx "$H_VULGARE_FASTA"
+fi
+
+# ----------------------------
+# Process Urartu FASTA files in current directory
+# ----------------------------
+for fasta in *.fasta; do
+    gene_id=$(basename "$fasta" .fasta)
+
+    # Get H. vulgare ortholog ID from RBH table
+    h_ortholog=$(awk -v id="$gene_id" '$1 == id { print $2 }' "$RBH_TAB")
+
+    if [[ -z "$h_ortholog" ]]; then
+        echo "No ortholog found in RBH for $gene_id" | tee -a "$MISSING_LOG"
+        continue
+    fi
+
+    # Extract sequence ID after '|'
+    h_seq_id=$(echo "$h_ortholog" | cut -d'|' -f2)
+
+    # Extract ortholog sequence
+    if ! seqkit faidx "$H_VULGARE_FASTA" "$h_seq_id" > tmp_seq.fa 2>/dev/null; then
+        echo "Ortholog $h_seq_id not found in FASTA for $gene_id" | tee -a "$MISSING_LOG"
+        continue
+    fi
+
+    # Append ortholog to FASTA
+    cat tmp_seq.fa >> "$fasta"
+    echo "Appended $h_seq_id to $fasta"
+
+    #  Copy updated file to destination
+    cp "$fasta" "$DEST_DIR/"
+
+    # Clean up
+    rm -f tmp_seq.fa
+done
+
+echo "Done. Missing entries logged in: $MISSING_LOG"
+```
+
+
+
 
 *impMKT aligment:*
 
