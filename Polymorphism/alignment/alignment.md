@@ -309,7 +309,67 @@ The script adds the outgroup sequence to each multi-fasta contig, and copy them 
 ```
 
 ```bash
+#!/bin/bash
 
+# ----------------------------
+# Usage and argument parsing
+# ----------------------------
+if [ "$#" -ne 3 ]; then
+    echo "Usage: $0 <RBH_table> <H_vulgare_fasta> <destination_directory>"
+    echo "Example:"
+    echo "  $0 RBH_table.txt hvulgare_CDS.fasta /path/to/output"
+    exit 1
+fi
+
+RBH_TAB="$1"
+H_VULGARE_FASTA="$2"
+DEST_DIR="$3"
+
+# ----------------------------
+# Logging
+# ----------------------------
+MISSING_LOG="missing_orthologs.txt"
+> "$MISSING_LOG"  # Clear log
+
+module load bioinfo-cirad
+module load seqkit/2.8.1
+# ----------------------------
+# Process FASTA files
+# ----------------------------
+for fasta in *.fasta; do
+    gene_id=$(basename "$fasta" .fasta)
+    echo "Processing $gene_id..."
+
+    # Get EXACT H. vulgare ID from second column of RBH table (skip comments)
+    h_ortholog=$(grep -v "^#" "$RBH_TAB" | awk -v id="$gene_id" '$1 == id { print $2 }')
+
+    if [[ -z "$h_ortholog" ]]; then
+        echo "No ortholog found in RBH for $gene_id" | tee -a "$MISSING_LOG"
+        continue
+    fi
+
+    echo "  Hordeum ortholog ID: $h_ortholog"
+
+    # Extract sequence using EXACT RBH-mapped ID
+    if ! seqkit faidx "$H_VULGARE_FASTA" "$h_ortholog" > tmp_seq.fa 2>/dev/null; then
+        echo "Ortholog '$h_ortholog' not found in FASTA for $gene_id" | tee -a "$MISSING_LOG"
+        continue
+    fi
+
+    # Append ortholog to FASTA (only if tmp_seq.fa exists/non-empty)
+    if [ -s tmp_seq.fa ]; then
+        cat tmp_seq.fa >> "$fasta"
+        echo "  Appended $h_ortholog to $fasta"
+        cp "$fasta" "$DEST_DIR/"
+    else
+        echo "  Warning: tmp_seq.fa is empty for $h_ortholog" | tee -a "$MISSING_LOG"
+    fi
+
+    # Clean up
+    rm -f tmp_seq.fa
+done
+
+echo "Done. Missing entries logged in: $MISSING_LOG"
 ```
 
 
