@@ -164,63 +164,82 @@ echo "Done. Missing entries logged in: $MISSING_LOG"
 
 
 Alignment with Macse: 
+Adapt the alignment output directory, the number of files to aligned and run the script on the input directory
 
 ```bash
 #!/bin/bash
+#SBATCH --job-name=alignment_impMKT_species
+#SBATCH --output=./log_%j_%x_out.txt
+#SBATCH --error=./log_%j_%x_err.txt
+#SBATCH --array=1-5630%17  # Adjust range based on number of files
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --mem=20G
+#SBATCH --time=50:00:00
+#SBATCH --partition=agap_long
 
+# ---------------------------
 # Load necessary modules
+# ---------------------------
 module load bioinfo-cirad
 module load java/jre1.8.0_31
 
-# Path to MACSE JAR
+# ---------------------------
+# MACSE Configuration
+# ---------------------------
 MACSE_JAR="/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/03_scripts/dn_ds_pipeline/MACSE/macse_v1.2.jar"
-
-# Output directory
-ALIGN_DIR="macse_alignments"
+ALIGN_DIR="/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/MACSE/urartu_covered_impMKT"
 mkdir -p "$ALIGN_DIR"
 
-# MACSE alignment parameters (you can change these if needed)
-THREADS=4                         # Number of threads
-GENETIC_CODE=1                   # NCBI genetic code table (1 = standard)
-FRAMESHIFT_MODE="keep"          # How to handle frameshifts: keep | remove | correct
-JAVA_MEM=2000m                  # Java max memory in MB
+THREADS=4
+GENETIC_CODE=1
+FRAMESHIFT_MODE="keep"
+JAVA_MEM=4000m
 
-# Penalty costs
-FSC=30                          # Frameshift cost
-SC=100                          # Stop codon cost
-GAPC=7                          # Gap creation cost
-GAPE=1                          # Gap extension cost
-
-# Less-reliable sequences penalty
+FSC=30
+SC=100
+GAPC=7
+GAPE=1
 FSC_LR=10
 SC_LR=60
 
-# Process each .fasta file
-for file in *.fasta; do
-    base=$(basename "$file" .fasta)
+# ---------------------------
+# Select the correct file based on SLURM_ARRAY_TASK_ID
+# ---------------------------
+FILES=(*.fasta)
+TOTAL=${#FILES[@]}
+INDEX=$((SLURM_ARRAY_TASK_ID - 1))
 
-    echo "Aligning $file with MACSE..."
+if [ "$INDEX" -ge "$TOTAL" ]; then
+    echo "SLURM_ARRAY_TASK_ID ($SLURM_ARRAY_TASK_ID) exceeds number of files ($TOTAL). Exiting."
+    exit 1
+fi
 
-    java -Xmx"$JAVA_MEM" -jar "$MACSE_JAR" \
-        -prog alignSequences \
-        -seq "$file" \
-        -out_NT "${ALIGN_DIR}/${base}_aligned_NT.fasta" \
-        -out_AA "${ALIGN_DIR}/${base}_aligned_AA.fasta" \
-        -thread "$THREADS" \
-        -code "$GENETIC_CODE" \
-        -shift "$FRAMESHIFT_MODE" \
-        -fsc "$FSC" \
-        -sc "$SC" \
-        -gapc "$GAPC" \
-        -gape "$GAPE" \
-        -fsc_lr "$FSC_LR" \
-        -sc_lr "$SC_LR" \
-        -del yes
+FILE="${FILES[$INDEX]}"
+BASENAME=$(basename "$FILE" .fasta)
 
-    echo "Alignment complete for: $file"
-done
+echo "SLURM Task ID: $SLURM_ARRAY_TASK_ID  Processing file: $FILE"
 
-echo "All alignments stored in: $ALIGN_DIR"
+# ---------------------------
+# Run MACSE alignment
+# ---------------------------
+java -Xmx"$JAVA_MEM" -jar "$MACSE_JAR" \
+    -prog alignSequences \
+    -seq "$FILE" \
+    -out_NT "${ALIGN_DIR}/${BASENAME}_aligned_NT.fasta" \
+    -out_AA "${ALIGN_DIR}/${BASENAME}_aligned_AA.fasta" \
+    -thread "$THREADS" \
+    -code "$GENETIC_CODE" \
+    -shift "$FRAMESHIFT_MODE" \
+    -fsc "$FSC" \
+    -sc "$SC" \
+    -gapc "$GAPC" \
+    -gape "$GAPE" \
+    -fsc_lr "$FSC_LR" \
+    -sc_lr "$SC_LR" \
+    -del yes
+
+echo "Alignment complete: $FILE $ALIGN_DIR/${BASENAME}_aligned_NT.fasta"
 ```
 
 **Core Configuration**
