@@ -11,5 +11,9 @@ Mutica cds after cd_hit cleaning : 107 105
 Speltoides cds before cleaning : 46 344
 Speltoides cds after cleaning : 45 644
 
+Tauschii cds before cleaning: 258 680
+Tauschii cds after cleaning: 258 216
+Tauschii cds after cd_hit cleaning : 
+
 Hordeum cds before cleaning: 39 179
 Hordeum cds after cleaning: 38 962
