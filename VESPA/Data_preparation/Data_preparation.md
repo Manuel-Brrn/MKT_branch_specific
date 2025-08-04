@@ -12,6 +12,9 @@ Commands: clean, ensemble_clean, translate, create_database, gene_selection
 Each sequence is confirmed as protein coding by using a conditional statement to verify that the nucleotide sequence contains only complete codons (i.e. the length of the sequence is exactly divisible by 3). And transcript with stop codon are eliminated.
 ```bash
 python2 vespa.py clean –input=user_input
+
+# obtain a list of problematic cds
+grep -oP '(?<=>).*?(?= gene)' cleaned_genes_removed.log
 ```
 
 ### **Traduction cds in protein**
