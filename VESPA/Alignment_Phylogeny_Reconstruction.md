@@ -82,6 +82,22 @@ for file in N0.*.fasta; do
 done
 ```
 
+
+**Directory for codemld set_up**
+
+```bash
+#!/bin/bash
+
+# Set species tree file
+SPECIES_TREE="Simplified_SpeciesTree.txt"
+
+# Loop through all fasta files in the directory
+for fasta in *.fasta; do
+    echo "Running vespa.py on $fasta..."
+    python2 vespa.py infer_genetree -input="$fasta" -species_tree="$SPECIES_TREE"
+done
+```
+
 *Phylogeny Reconstruction for 4 or more species*
 
 
