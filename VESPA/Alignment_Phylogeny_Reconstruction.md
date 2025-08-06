@@ -50,20 +50,28 @@ cpanm Bio::MUST::Apps::HmmCleaner
 
 HmmCleaner.pl --version
 
-export PERL5LIB=/home/barrientosm/my_perl_5.36.0/lib/site_perl/5.36.0:/home/barrientosm/my_perl_5.36.0/lib/site_perl/5.36.0/x86_64-linux:/home/barrientosm/my_perl_5.36.0/lib/5.36.0:/home/barrientosm/my_perl_5.36.0/lib/5.36.0/x86_64-linux
+# Set Perl environment
+export PERL5LIB=/home/barrientosm/my_perl_5.36.0/lib/perl5:/home/barrientosm/my_perl_5.36.0/lib/perl5/x86_64-linux
 export PATH=/home/barrientosm/my_perl_5.36.0/bin:$PATH
 
- for f in /home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/VESPA/alignment/mafft/*.fa; do
-     base=$(basename "$f" .fa);
-cleaned="/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/VESPA/alignment/mafft/${base}_hmm.fasta";
+# Define the input directory
+INPUT_DIR="/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/MACSE/urartu_covered"
 
-if [ ! -f "$cleaned" ]; then
-echo "=== Processing $f ===";
-env  PERL5LIB=/home/barrientosm/my_perl_5.36.0/lib/perl5:/home/barrientosm/my_perl_5.36.0/lib/perl5/x86_64-linux \
-     /home/barrientosm/my_perl_5.36.0/bin/perl -Ilib bin/HmmCleaner.pl "$f";
-else
-echo "=== Skipping $f (already cleaned) ===";
-fi;
+# Process each aligned NT fasta file
+for f in "$INPUT_DIR"/*_aligned_NT.fasta; do
+    base=$(basename "$f" .fasta)  # includes _aligned_NT
+
+    out_fasta="${INPUT_DIR}/${base}_hmm.fasta"
+    out_log="${INPUT_DIR}/${base}_hmm.log"
+    out_score="${INPUT_DIR}/${base}_hmm.score"
+
+    if [[ -f "$out_fasta" && -f "$out_log" && -f "$out_score" ]]; then
+        echo "=== Skipping $f (already cleaned) ==="
+    else
+        echo "=== Processing $f ==="
+        env PERL5LIB=/home/barrientosm/my_perl_5.36.0/lib/perl5:/home/barrientosm/my_perl_5.36.0/lib/perl5/x86_64-linux \
+            /home/barrientosm/my_perl_5.36.0/bin/perl -Ilib bin/HmmCleaner.pl "$f"
+    fi
 done > hmmcleaner_all.log 2>&1
 ```
 
