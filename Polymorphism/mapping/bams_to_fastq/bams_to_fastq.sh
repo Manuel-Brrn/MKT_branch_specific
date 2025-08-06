@@ -4,6 +4,7 @@ module load bioinfo-cirad
 module load samtools/1.14-bin
 
 # Define output directory
+################### ADAPT THE PATH ##########
 OUTDIR="/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/data_RNAseq/T_boeticum/1_sp_analysis/fastq_from_bams"
 
 # Make sure output directory exists
