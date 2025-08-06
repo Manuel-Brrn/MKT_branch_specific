@@ -82,6 +82,62 @@ for file in N0.*.fasta; do
 done
 ```
 
+**Translate again in nucleotides**
+```bash
+#!/bin/bash
+#SBATCH --job-name=translate
+#SBATCH --output=log_%j_%x.out
+#SBATCH --error=log_%j_%x.err
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --mem=12G
+#SBATCH --time=01:00:00
+#SBATCH --partition=agap_short
+
+module load bioinfo-cirad
+module load python/2.7.18
+
+# === CONFIGURATION ===
+INPUT_DIR="/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/VESPA/prottest/alignments_inputs"
+VESPA_SCRIPT="/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/VESPA/alignment/cleaned_alignments/vespa.py"
+CDS_DATABASE="/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/VESPA/cds_sequences/database/cds_database.fasta"
+OUTPUT_BASE="/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/VESPA/alignment/translated_alignments"
+
+mkdir -p "$OUTPUT_BASE"
+cd "$INPUT_DIR" || { echo "Erreur : impossible d'accéder à $INPUT_DIR"; exit 1; }
+
+for fasta_file in *hmm.fasta; do
+    [ ! -f "$fasta_file" ] && continue
+
+    hog_id=$(echo "$fasta_file" | grep -o 'HOG[0-9]\+')
+    hog_output_dir="$OUTPUT_BASE/$hog_id"
+    mkdir -p "$hog_output_dir"
+
+    # Nom temporaire sans extension
+    tmp_name="$hog_id"
+    cp "$fasta_file" "$hog_output_dir/$tmp_name"
+
+    # Créer le répertoire attendu par vespa.py
+    mkdir -p "$hog_output_dir/Map_Gaps_${hog_id}"
+
+    echo "Traitement de $hog_id"
+
+    (
+        cd "$hog_output_dir" && \
+        python2 "$VESPA_SCRIPT" map_alignments \
+            -input="$tmp_name" \
+            -database="$CDS_DATABASE"
+    )
+
+    if [ -f "$hog_output_dir/${hog_id}_aln_hmm.fasta" ]; then
+        echo "OK pour $hog_id"
+    else
+        echo "ÉCHEC pour $hog_id"
+    fi
+done
+
+echo "Traitement terminé. Résultats dans : $OUTPUT_BASE"
+```
 
 **Directory for codemld set_up**
 
