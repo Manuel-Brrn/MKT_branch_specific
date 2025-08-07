@@ -140,43 +140,51 @@ echo "Traitement terminé. Résultats dans : $OUTPUT_BASE"
 ```
 
 
-**Number of alignment kept**
+**Number of alignment lost**
+```bash
+grep -B 2 "Sequence" log_28749510_translate.out | grep "Traitement de" | awk '{print $3}' > extracted_hog_ids.txt
+```
+
+**Copy cleaned alignments translated in nucletoides**
+
 ```bash
 #!/bin/bash
 
-BASE_DIR="/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/VESPA/gene_trees/Map_Gaps_cleaned"
+# Source and destination directories
+SRC_DIR="/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/VESPA/alignment/translated_alignments"
+DEST_DIR="/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/VESPA/alignment/translated_alignments_cleaned"
+EXCLUDE_LIST="extracted_hog_ids.txt"
 
-total_hogs=0
-with_files=0
-with_3seq=0
+# Create destination directory if it doesn't exist
+mkdir -p "$DEST_DIR"
 
-echo "Analyzing HOG directories in $BASE_DIR..."
+# Load the exclusion list into an associative array for fast lookup
+declare -A EXCLUDE
+while read -r line; do
+    EXCLUDE["$line"]=1
+done < "$EXCLUDE_LIST"
 
-for hog_dir in "$BASE_DIR"/HOG*/; do
-    ((total_hogs++))
-    hog_id=$(basename "$hog_dir")
+# Loop through all HOG directories in the source
+for hog_dir in "$SRC_DIR"/*; do
+    HOG_ID=$(basename "$hog_dir")
 
-    #  Chemin correct vers le fichier généré par VESPA
-    target_dir="${hog_dir}/Map_Gaps_${hog_id}"
-    target_file="${target_dir}/${hog_id}"
+    # Skip if the HOG is in the exclusion list
+    if [[ ${EXCLUDE["$HOG_ID"]+_} ]]; then
+        echo "Skipping excluded HOG: $HOG_ID"
+        continue
+    fi
 
-    if [ -f "$target_file" ]; then
-        ((with_files++))
+    # Define the path to the alignment file inside Map_Gaps_HOGXXXX
+    FILE_TO_COPY="${hog_dir}/Map_Gaps_${HOG_ID}/${HOG_ID}"
 
-        seq_count=$(grep -c '^>' "$target_file" 2>/dev/null || echo 0)
-        if [ "$seq_count" -eq 3 ]; then
-            ((with_3seq++))
-        fi
+    # Check if the file exists
+    if [[ -f "$FILE_TO_COPY" ]]; then
+        echo "Copying $FILE_TO_COPY to $DEST_DIR"
+        cp "$FILE_TO_COPY" "$DEST_DIR/${HOG_ID}.fasta"
+    else
+        echo "File not found: $FILE_TO_COPY"
     fi
 done
-
-echo "=== Analysis Results ==="
-echo "Total HOG directories processed: $total_hogs"
-echo "HOGs with alignment files: $with_files"
-echo "HOGs with files containing exactly 3 sequences: $with_3seq"
-echo "Detailed breakdown:"
-echo "- HOGs with 0-2 sequences: $((with_files - with_3seq))"
-echo "- HOGs with exactly 3 sequences: $with_3seq"
 ```
 
 **Directory for codemld set_up**
@@ -203,6 +211,7 @@ Orthofinder repertory:
 sed -E 's/:[0-9.]+//g; s/[0-9]+//g' SpeciesTree_rooted.txt > SpeciesTree_topology_only.txt
 ```
 
+**Run infer_genetree**
 ```bash
 #!/bin/bash
 
@@ -212,7 +221,7 @@ SPECIES_TREE="Simplified_SpeciesTree.txt"
 # Loop through all fasta files in the directory
 for fasta in *.fasta; do
     echo "Running vespa.py on $fasta..."
-    python2 vespa.py infer_genetree -input="$fasta" -species_tree="$SPECIES_TREE"
+    python2 /home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/03_scripts/dn_ds_pipeline/VESPA/VESPA-1.0.1/vespa.py infer_genetree -input="$fasta" -species_tree="$SPECIES_TREE"
 done
 ```
 
