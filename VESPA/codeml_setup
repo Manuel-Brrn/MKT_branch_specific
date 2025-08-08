@@ -1,0 +1,45 @@
+
+
+#!/bin/bash
+
+# Loop over all target directories
+for hog_dir in Inferred_Genetree_HOG*/HOG*; do
+    echo "Processing $hog_dir"
+    
+    # 1. Create branch_table.txt in HOG directory (not in codeml input dir)
+    cat > "$hog_dir/branch_table.txt" <<EOF
+Aespeltoides
+Aemutica
+Turartu
+Tmonococcum
+Aegilops_ancestor: Aespeltoides, Aemutica
+Triticum_ancestor: Turartu, Tmonococcum
+EOF
+
+    # 2. Create codeml input directory with HOG* prefix
+    codeml_dir="${hog_dir}/HOG_codeml_input"  # Changed to your requested name
+    mkdir -p "$codeml_dir"
+
+    # 3. Copy and clean fasta
+    fasta_file=$(find "$hog_dir" -name "HOG*.fasta" | head -n 1)
+    if [ -f "$fasta_file" ]; then
+        cp "$fasta_file" "$codeml_dir/cleaned.fasta"
+        sed -i 's/|.*//; s/_//g' "$codeml_dir/cleaned.fasta"
+    else
+        echo "❌ No FASTA found in $hog_dir"
+    fi
+
+    # 4. Copy and clean tree
+    tree_file=$(find "$hog_dir" -name "HOG*.tre" | head -n 1)
+    if [ -f "$tree_file" ]; then
+        cp "$tree_file" "$codeml_dir/cleaned.tre"
+        sed -i 's/|[^),]*//g; s/_//g' "$codeml_dir/cleaned.tre"
+    else
+        echo "❌ No TREE found in $hog_dir"
+    fi
+
+    # Verification
+    echo "Created files:"
+    echo "- Branch table: $hog_dir/branch_table.txt"
+    echo "- CodeML inputs: $codeml_dir/{cleaned.fasta,cleaned.tre}"
+done
