@@ -1,5 +1,8 @@
 
+**codeml setup**
+Create a branch file, and renames the sequences to makes work the codeml set_up command, in order to run the branch model
 
+```bash
 #!/bin/bash
 
 # Loop over all target directories
