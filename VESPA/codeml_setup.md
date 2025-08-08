@@ -46,3 +46,43 @@ EOF
     echo "- Branch table: $hog_dir/branch_table.txt"
     echo "- CodeML inputs: $codeml_dir/{cleaned.fasta,cleaned.tre}"
 done
+```
+
+
+
+Script to run codeml_setup function in every directory
+```bash
+#!/bin/bash
+
+# Set PERL5LIB environment
+export PERL5LIB=/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/03_scripts/dn_ds_pipeline/VESPA/VESPA-1.0.1:$PERL5LIB
+
+# Base path to vespa.py
+VESPA_SCRIPT="/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/VESPA/alignment/cleaned_alignments/vespa.py"
+
+# Loop through each target HOG directory
+for hog_dir in Inferred_Genetree_HOG*/HOG*; do
+    echo "Entering directory: $hog_dir"
+
+    cd "$hog_dir" || { echo "❌ Failed to enter $hog_dir"; continue; }
+
+    # Check inputs exist
+    if [[ ! -f branch_table.txt ]]; then
+        echo "❌ Missing branch_table.txt in $hog_dir"
+        cd - > /dev/null
+        continue
+    fi
+
+    if [[ ! -d HOG_codeml_input ]]; then
+        echo "❌ Missing HOG_codeml_input directory in $hog_dir"
+        cd - > /dev/null
+        continue
+    fi
+
+    # Run VESPA codeml_setup
+    echo "Running VESPA codeml_setup..."
+    python2 "$VESPA_SCRIPT" codeml_setup -input=HOG_codeml_input -branch_file=branch_table.txt
+
+    cd - > /dev/null
+done
+```
