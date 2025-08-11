@@ -292,16 +292,27 @@ Usage
 ```bash
 #!/bin/bash
 
-# Usage: ./get_cds_positions.sh <transcript_stats> <utr_lengths> <output_file>
+# Usage: ./CDS_positions.sh <transcript_stats> <utr_lengths> <output_file>
+# Example:
+# ./CDS_positions.sh cleaned_sequence_stats.txt utr_lengths.tab cds_positions.tab
 
 # Input files
 STATS_FILE="$1"
 UTR_FILE="$2"
 OUTPUT_FILE="$3"
 
-echo "Generating CDS positions table..."
+# Check args
+if [ "$#" -ne 3 ]; then
+    echo "Error: Incorrect number of arguments."
+    echo "Usage: $0 <transcript_stats> <utr_lengths> <output_file>"
+    exit 1
+fi
 
-# Process files and merge data
+echo "Generating CDS positions table..."
+echo "Transcript stats: $STATS_FILE"
+echo "UTR lengths:      $UTR_FILE"
+echo "Output file:      $OUTPUT_FILE"
+
 awk -F'\t' '
 BEGIN {
     OFS = "\t";
@@ -320,8 +331,7 @@ NR==FNR {
 {
     # Read transcript stats file
     full_id = $1;
-    split($1, ids, /[|]/);
-    transcript_id = ids[2];
+    transcript_id = $1;  # Now matches UTR file IDs exactly
     original_length = $2;
 
     # Skip if transcript not in UTR file
@@ -331,13 +341,8 @@ NR==FNR {
     }
 
     # Calculate CDS positions
-    if (strand[transcript_id] == "+") {
         cds_start = 200 + five_utr[transcript_id] + 1;
         cds_end = original_length - 200 - three_utr[transcript_id];
-    } else {
-        cds_start = 200 + three_utr[transcript_id] + 1;
-        cds_end = original_length - 200 - five_utr[transcript_id];
-    }
 
     # Verify positions are valid
     if (cds_start >= cds_end) {
@@ -345,10 +350,22 @@ NR==FNR {
         next;
     }
 
+    # Output result
     print full_id, transcript_id, cds_start, cds_end, strand[transcript_id],
           five_utr[transcript_id], three_utr[transcript_id], original_length;
 }' "$UTR_FILE" "$STATS_FILE" > "$OUTPUT_FILE"
 
 echo "CDS positions saved to: $OUTPUT_FILE"
+
 ```
 
+**CDS table for ORF_extractor**
+
+```bash
+awk 'NR>1 {gsub(/\./, "_", $1); print $1, $3, $4}' table_cds.txt > new_file.txt
+```
+
+**Replace dots by underscore on the multi fasta for ORF_extractor**
+```bash
+awk '/^>/ {gsub(/\./, "_"); print; next} {print}' monococcum_high_coverage.fasta > monococcum_high_coverage_underscores.fasta
+```
