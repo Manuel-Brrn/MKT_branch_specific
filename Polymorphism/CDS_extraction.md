@@ -369,3 +369,57 @@ awk 'NR>1 {gsub(/\./, "_", $1); print $1, $3, $4}' table_cds.txt > new_file.txt
 ```bash
 awk '/^>/ {gsub(/\./, "_"); print; next} {print}' monococcum_high_coverage.fasta > monococcum_high_coverage_underscores.fasta
 ```
+
+**ORF_extractor**
+```bash
+#!/bin/bash
+#SBATCH --job-name=ORF_extraction
+#SBATCH --output=./log_%j_%x_out.txt
+#SBATCH --error=./log_%j_%x_err.txt
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --mem=6G
+#SBATCH --time=6:00:00
+#SBATCH --partition=agap_normal
+
+# ====== Use your personal Perl environment ======
+#export PATH=$HOME/my_perl_5.36.0/bin:$PATH
+#export PERL5LIB=$HOME/my_perl_5.36.0/lib/site_perl/5.36.0:$HOME/my_perl_5.36.0/lib/5.36.0
+
+export PATH=$HOME/my_perl_5.36.0/bin:$PATH
+export PERL5LIB=$HOME/my_perl_5.36.0/lib/perl5:$HOME/my_perl_5.36.0/lib/site_perl/5.36.0:$HOME/my_perl_5.36.0/lib/5.36.0
+
+# ====== Arguments ======
+if [ "$#" -ne 3 ]; then
+    echo "Usage: $0 <ORF_table_path> <multi_fasta_path> <output_prefix>"
+    exit 1
+fi
+
+ORF_TABLE="$1"
+MULTI_FASTA="$2"
+OUTPUT_PREFIX="$3"
+
+echo "Starting ORF extraction job at $(date)"
+echo "Using Perl: $(which perl)"
+perl -MBio::SeqIO -e 'print "BioPerl is working in job environment\n"' || {
+    echo "Error: BioPerl not found in job environment"
+    exit 1
+}
+
+# ====== Run ORF extractor ======
+$HOME/my_perl_5.36.0/bin/perl \
+    /home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/orf_extractor/ORF_extractor.pl \
+    -orf "$ORF_TABLE" \
+    -otype auto \
+    -seq "$MULTI_FASTA" \
+    -stype auto \
+    -out "$OUTPUT_PREFIX"
+
+if [ $? -eq 0 ]; then
+    echo "ORF extraction completed successfully at $(date)"
+else
+    echo "Error: ORF extraction failed!"
+    exit 1
+fi
+```
+
