@@ -311,6 +311,10 @@ for f in "$INPUT_DIR"/*_aligned_NT.fasta; do
 done > hmmcleaner_speltoides.log 2>&1
 ```
 
+**Copy the cleaned alignment in the right directory**
+```bash
+cp *NT_hmm.fasta* /path/nucleotides_alignments_cleaned_hmm_cleaner/
+```
 
 **Put the outgroup sequence at the end of the alignment**
 ```bash
