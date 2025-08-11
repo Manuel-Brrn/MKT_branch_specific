@@ -287,7 +287,104 @@ done
 Adapt ">T_urartu" to the species name
 
 
+**Alignment with Macse:**
+Adapt the alignment output directory, the number of files to aligned and run the script on the input directory
 
+```bash
+#!/bin/bash
+#SBATCH --job-name=alignment_impMKT_species
+#SBATCH --output=./log_%j_%x_out.txt
+#SBATCH --error=./log_%j_%x_err.txt
+#SBATCH --array=1-5630%17  # Adjust range based on number of files
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --mem=20G
+#SBATCH --time=50:00:00
+#SBATCH --partition=agap_long
+
+# ---------------------------
+# Load necessary modules
+# ---------------------------
+module load bioinfo-cirad
+module load java/jre1.8.0_31
+
+# ---------------------------
+# MACSE Configuration
+# ---------------------------
+MACSE_JAR="/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/03_scripts/dn_ds_pipeline/MACSE/macse_v1.2.jar"
+ALIGN_DIR="/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/MACSE/urartu_covered_impMKT"
+mkdir -p "$ALIGN_DIR"
+
+THREADS=4
+GENETIC_CODE=1
+FRAMESHIFT_MODE="keep"
+JAVA_MEM=4000m
+
+FSC=30
+SC=100
+GAPC=7
+GAPE=1
+FSC_LR=10
+SC_LR=60
+
+# ---------------------------
+# Select the correct file based on SLURM_ARRAY_TASK_ID
+# ---------------------------
+FILES=(*.fasta)
+TOTAL=${#FILES[@]}
+INDEX=$((SLURM_ARRAY_TASK_ID - 1))
+
+if [ "$INDEX" -ge "$TOTAL" ]; then
+    echo "SLURM_ARRAY_TASK_ID ($SLURM_ARRAY_TASK_ID) exceeds number of files ($TOTAL). Exiting."
+    exit 1
+fi
+
+FILE="${FILES[$INDEX]}"
+BASENAME=$(basename "$FILE" .fasta)
+
+echo "SLURM Task ID: $SLURM_ARRAY_TASK_ID  Processing file: $FILE"
+
+# ---------------------------
+# Run MACSE alignment
+# ---------------------------
+java -Xmx"$JAVA_MEM" -jar "$MACSE_JAR" \
+    -prog alignSequences \
+    -seq "$FILE" \
+    -out_NT "${ALIGN_DIR}/${BASENAME}_aligned_NT.fasta" \
+    -out_AA "${ALIGN_DIR}/${BASENAME}_aligned_AA.fasta" \
+    -thread "$THREADS" \
+    -code "$GENETIC_CODE" \
+    -shift "$FRAMESHIFT_MODE" \
+    -fsc "$FSC" \
+    -sc "$SC" \
+    -gapc "$GAPC" \
+    -gape "$GAPE" \
+    -fsc_lr "$FSC_LR" \
+    -sc_lr "$SC_LR" \
+    -del yes
+
+echo "Alignment complete: $FILE $ALIGN_DIR/${BASENAME}_aligned_NT.fasta"
+```
+Core Configuration Parameter Value Explanation -thread 4 Number of CPU threads for parallel processing. -code 1 NCBI Genetic Code Table 1 (standard eukaryotic code). Other codes: 2 (vertebrate mitochondrial), 11 (bacterial), etc. -shift keep How to handle frameshifts:
+
+    keep: Preserve frameshifts as gaps (---).
+    remove: Delete sequences with frameshifts.
+    correct: Attempt to fix frameshifts. -Xmx 2000m Java heap memory (2GB). Increase (e.g., 4000m) for large datasets.
+
+Penalty Costs (Critical for Alignment Quality) A. Standard Penalties Parameter Value Role in Alignment -fsc 30 Frameshift cost: Penalty for introducing a frameshift (higher = fewer frameshifts). -sc 100 Stop codon cost: Penalty for aligning a stop codon (*) in the middle of a sequence. -gapc 7 Gap creation cost: Penalty for opening a gap (higher = fewer gaps). -gape 1 Gap extension cost: Penalty for extending a gap (lower = longer gaps allowed).
+
+B. Less-Reliable (LR) Sequence Penalties Parameter Value Purpose -fsc_lr 10 Lower frameshift penalty for unreliable sequences (e.g., low-quality data). -sc_lr 60 Lower stop codon penalty for unreliable sequences.
+
+Standard penalties (-fsc, -sc) apply to high-confidence regions.
+LR penalties (-fsc_lr, -sc_lr) relax constraints for ambiguous regions, preventing over-penalization.
+
+Output Options Parameter Output File Content -out_NT *_aligned_NT.fasta Nucleotide alignment (frameshifts as gaps). -out_AA *_aligned_AA.fasta Amino acid alignment (stop codons as *). -del yes Delete temporary files.
+
+Biological Interpretation of Penalties Frameshifts (-fsc) High cost (30): Favors alignments with fewer frameshifts. Example: A sequence with a frameshift mutation will be heavily penalized unless the mutation is biologically real.
+
+Stop Codons (-sc) Very high cost (100): Strongly discourages internal stop codons (likely sequencing errors). Exception: Lower penalty (-sc_lr 60) for low-quality regions.
+
+Gaps (-gapc, -gape) Gap creation (7) > extension (1): Favors fewer but longer gaps (common in evolutionary alignments).
 
 **Clean alignments with Hmmcleaner**
 ```bash
