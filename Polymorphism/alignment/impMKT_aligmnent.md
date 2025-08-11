@@ -6,7 +6,7 @@
 
 **Add the reference sequence of the focal species:**
 
-**Extracts sequences from a FASTA file based on contig IDs using parallel processing.**
+**Extracts sequences from a FASTA file based on contig IDs**
 otbain : contigs_ID.txt ; list of genes to be extracted
 ```bash
 grep ">" urartu_covered_cds.cds | cut -d "|" -f1 | sed 's/^>//' | uniq > contigs_ID.txt
