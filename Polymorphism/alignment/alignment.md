@@ -326,10 +326,156 @@ done
 rm tmp_non_outgroup.fasta tmp_outgroup.fasta
 ```
 
+**Rename_sequences for dndspinpis**
+```bash
+#!/bin/bash
 
+# =============================================
+# CONFIGURABLE PARAMETERS (edit as needed)
+# =============================================
 
+# Species tags
+OUTGROUP_OLD_TAG="H_vulgare"    # Original outgroup header pattern (keep original tag)
+FOCAL_OLD_TAG="sp"              # Original focal species tag (to replace)
+FOCAL_NEW_TAG="T_urartu"        # New focal species identifier
 
+# RBH file settings
+RBH_QUERY_COL=2                 # Column with outgroup IDs in RBH file
+RBH_TARGET_COL=1                # Column with focal species IDs in RBH file
 
+# =============================================
+# FUNCTIONS (modular steps)
+# =============================================
+
+clean_headers() {
+  local infile="$1"
+  local outfile="$2"
+  echo "Cleaning headers: removing text after first space..."
+  awk '/^>/ { split($0, a, " "); print a[1]; next } { print }' "$infile" > "$outfile"
+}
+
+tag_outgroup() {
+  local infile="$1"
+  local outfile="$2"
+  echo "Keeping original outgroup tag (${OUTGROUP_OLD_TAG}) and adding '|outgroup|' suffix..."
+  awk -v oldtag="$OUTGROUP_OLD_TAG" '
+    /^>/ {
+      if ($0 ~ oldtag) {
+        if ($0 !~ /\|outgroup\|$/) {
+          print $0 "|outgroup|";
+        } else {
+          print $0;
+        }
+      } else {
+        print $0;
+      }
+      next
+    }
+    { print }
+  ' "$infile" > "$outfile"
+}
+
+map_rbh_contigs() {
+  local infile="$1"
+  local rbhfile="$2"
+  local outfile="$3"
+  echo "Mapping outgroup to focal contigs via RBH file..."
+  awk -v rbhfile="$rbhfile" \
+     -v query_col="$RBH_QUERY_COL" \
+     -v target_col="$RBH_TARGET_COL" \
+     -v outgroup_tag="$OUTGROUP_OLD_TAG" '
+    BEGIN {
+      FS="\t";
+      while ((getline line < rbhfile) > 0) {
+        if (line ~ /^#/) continue;
+        split(line, fields, "\t");
+        original_id = fields[query_col];
+        b_to_a[original_id] = fields[target_col];
+        modified_id = original_id;
+        sub(/\.t/, "_t", modified_id);
+        if (modified_id != original_id) {
+          b_to_a[modified_id] = fields[target_col];
+        }
+      }
+      close(rbhfile);
+    }
+    {
+      if ($0 ~ /^>/ && $0 ~ outgroup_tag) {
+        header = substr($0, 2);
+        sub(/\|outgroup\|$/, "", header);
+        split(header, arr, "|");
+        hordeum_id = arr[1] "|" arr[2];
+        if (hordeum_id in b_to_a) {
+          print ">" b_to_a[hordeum_id] "|" header "|outgroup|";
+        } else {
+          print "WARNING: No RBH match for " hordeum_id > "/dev/stderr";
+          print $0;
+        }
+      } else {
+        print $0;
+      }
+    }' "$infile" > "$outfile"
+}
+
+replace_species_tag() {
+  local infile="$1"
+  local outfile="$2"
+  echo "Replacing species tag (${FOCAL_OLD_TAG} to ${FOCAL_NEW_TAG})..."
+  sed -E "s/^([^|]+\|)${FOCAL_OLD_TAG}(\|.*)/\1${FOCAL_NEW_TAG}\2/" "$infile" > "$outfile"
+}
+
+remove_trailing_pipes() {
+  local infile="$1"
+  local outfile="$2"
+  echo "Removing trailing '|' characters..."
+  sed -E '/^>/{ s/\|$// }' "$infile" > "$outfile"
+}
+
+# =============================================
+# MAIN EXECUTION
+# =============================================
+
+if [ "$#" -ne 3 ]; then
+  echo "Usage: $0 <alignment_fasta> <rbh_tab_file> <output_fasta>"
+  exit 1
+fi
+
+for file in "$1" "$2"; do
+  if [ ! -f "$file" ]; then
+    echo "Error: File '$file' not found!" >&2
+    exit 1
+  fi
+done
+
+TMP_DIR=$(mktemp -d)
+trap 'rm -rf "$TMP_DIR"' EXIT
+
+TMP1="$TMP_DIR/clean_headers.fasta"
+TMP2="$TMP_DIR/outgroup_tagged.fasta"
+TMP3="$TMP_DIR/rbh_mapped.fasta"
+TMP4="$TMP_DIR/species_replaced.fasta"
+
+clean_headers "$1" "$TMP1"
+tag_outgroup "$TMP1" "$TMP2"
+map_rbh_contigs "$TMP2" "$2" "$TMP3"
+replace_species_tag "$TMP3" "$TMP4"
+remove_trailing_pipes "$TMP4" "$3"
+
+echo -e "\nAll steps completed. Output saved to: $3"
+```
+
+*Run the script*
+```bash
+./reformat_header_alignment_file.sh \
+  input_alignment.fasta \
+  rbh_mappings.tab \
+  output_reformatted.fasta
+```
+Must edit ; 
+OUTGROUP_OLD_TAG=".."    # Original outgroup header pattern
+OUTGROUP_NEW_TAG=.."         # New outgroup identifier
+FOCAL_OLD_TAG="sp"                    # Original focal species tag (to replace)
+FOCAL_NEW_TAG=".."              # New focal species identifier
 
 
 
