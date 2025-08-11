@@ -363,6 +363,7 @@ echo "CDS positions saved to: $OUTPUT_FILE"
 
 ```bash
 awk 'NR>1 {gsub(/\./, "_", $1); print $1, $3, $4}' table_cds.txt > new_file.txt
+sed 's/ /\t/g' new_file.txt > ORF_tab-delimited.tab
 ```
 
 **Replace dots by underscore on the multi fasta for ORF_extractor**
