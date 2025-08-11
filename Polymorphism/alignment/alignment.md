@@ -466,18 +466,22 @@ echo -e "\nAll steps completed. Output saved to: $3"
 
 *Run the script*
 ```bash
-./reformat_header_alignment_file.sh \
-  input_alignment.fasta \
-  rbh_mappings.tab \
-  output_reformatted.fasta
+OUTDIR="/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/MACSE/urartu_covered/nucleotides_alignments_cleaned_hmm_cleaner/reordered_alignments/renamed_header"
+
+mkdir -p "$OUTDIR"
+
+for f in *.fasta; do
+  ./reformat_header_alignment_file.sh "$f" /home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/reciprocal_blast/urartu_hordeum/urartu_hordeum_vespa_cleaned/RBH_processed.tab "$OUTDIR/${f%.fasta}_renamed.fasta"
+done
 ```
 Must edit ; 
 OUTGROUP_OLD_TAG=".."    # Original outgroup header pattern
 OUTGROUP_NEW_TAG=.."         # New outgroup identifier
 FOCAL_OLD_TAG="sp"                    # Original focal species tag (to replace)
 FOCAL_NEW_TAG=".."              # New focal species identifier
-
-
+OUTDIR path
+RBH table path
+ 
 
 
 
