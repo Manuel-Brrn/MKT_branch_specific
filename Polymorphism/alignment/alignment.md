@@ -482,6 +482,10 @@ FOCAL_NEW_TAG=".."              # New focal species identifier
 OUTDIR path
 RBH table path
 
+**Delete empty alignments:**
+```bash
+find . -name "*.fasta" -type f -size 0 -delete
+```
 
 **Stastistic with AMAS:**
 ```bash
@@ -489,8 +493,6 @@ pip install amas
 find ~/.local/lib/python3.9/site-packages -name "AMAS.py"
 python3 /home/barrientosm/.local/lib/python3.9/site-packages/amas/AMAS.py summary -f fasta -d dna -i *.fasta
 ```
-
-
  
 **Merge all alignments to run dndspinpis**
 ```bash
