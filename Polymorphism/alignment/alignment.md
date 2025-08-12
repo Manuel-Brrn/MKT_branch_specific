@@ -482,6 +482,15 @@ FOCAL_NEW_TAG=".."              # New focal species identifier
 OUTDIR path
 RBH table path
 
+
+**Stastistic with AMAS:**
+```bash
+pip install amas
+find ~/.local/lib/python3.9/site-packages -name "AMAS.py"
+python3 /home/barrientosm/.local/lib/python3.9/site-packages/amas/AMAS.py summary -f fasta -d dna -i *.fasta
+```
+
+
  
 **Merge all alignments to run dndspinpis**
 ```bash
@@ -494,10 +503,6 @@ Must edit the path and name of the file
 sed '/^>/! s/x/N/g' monococcum_alignment.fasta > monococcum_alignment_clean.fasta
 ```
 Must edit the name's file
-
-
-
-
 
 
 
