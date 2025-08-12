@@ -489,6 +489,12 @@ cat *.fasta > /home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRI
 ```
 Must edit the path and name of the file
 
+**Replace all x with N (unknown nucleotide)**
+```bash
+sed '/^>/! s/x/N/g' monococcum_alignment.fasta > monococcum_alignment_clean.fasta
+```
+Must edit the name's file
+
 
 
 
