@@ -481,10 +481,13 @@ FOCAL_OLD_TAG="sp"                    # Original focal species tag (to replace)
 FOCAL_NEW_TAG=".."              # New focal species identifier
 OUTDIR path
 RBH table path
+
  
-
-
-
+**Merge all alignments to run dndspinpis**
+```bash
+cat *.fasta > /home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/dNdSpiNpiS/monococcum_covered/dNdSpiNpiS_input/monococcum_alignment.fasta
+```
+Must edit the path and name of the file
 
 
 
