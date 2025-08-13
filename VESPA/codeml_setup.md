@@ -74,6 +74,7 @@ for hog_dir in Inferred_Genetree_HOG*/HOG*; do
     fi
 
     if [[ ! -d HOG_codeml_input ]]; then
+
         echo "❌ Missing HOG_codeml_input directory in $hog_dir"
         cd - > /dev/null
         continue
@@ -84,5 +85,23 @@ for hog_dir in Inferred_Genetree_HOG*/HOG*; do
     python2 "$VESPA_SCRIPT" codeml_setup -input=HOG_codeml_input -branch_file=branch_table.txt
 
     cd - > /dev/null
+done
+```
+
+**Modify the codeml task file**
+```bash
+for dir in Inferred_Genetree_HOG*/HOG*/; do
+  if [ -f "$dir/codeml_taskfarm.txt" ]; then
+    # Crée un nouveau fichier avec extension .sh
+    outfile="$dir/codeml_taskfarm_fullpath.sh"
+    
+    sed "s|cd Codeml_Setup|cd $(realpath "$dir")/Codeml_Setup|g" "$dir/codeml_taskfarm.txt" \
+      > "$outfile"
+    
+    # Rendre le fichier exécutable
+    chmod +x "$outfile"
+    
+    echo "Created and made executable: $outfile"
+  fi
 done
 ```
