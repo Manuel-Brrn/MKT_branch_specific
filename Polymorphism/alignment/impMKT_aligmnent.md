@@ -411,6 +411,11 @@ for f in "$INPUT_DIR"/*_aligned_NT.fasta; do
 done > hmmcleaner_urartu_impMKT.log 2>&1
 ```
 
+**Copy the cleaned alignment in the right directory**
+```bash
+cp *NT_hmm.fasta* /path/nucleotides_alignments_cleaned_hmm_cleaner/
+```
+
 **Ordonner les séquences avec la référence en première et l'outgroup en dernier:**
 ```bash
 for f in *.fasta; do
@@ -432,3 +437,28 @@ for f in *.fasta; do
     rm -f tmp_first.fasta tmp_rest.fasta tmp_outgroup.fasta
 done
 ```
+
+**Stastistic with AMAS:**
+```bash
+pip install amas
+find ~/.local/lib/python3.9/site-packages -name "AMAS.py"
+python3 /home/barrientosm/.local/lib/python3.9/site-packages/amas/AMAS.py summary -f fasta -d dna -i *.fasta
+```
+ 
+**Merge all alignments**
+```bash
+cat *.fasta > /home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/dNdSpiNpiS/monococcum_covered/dNdSpiNpiS_input/monococcum_alignment.fasta
+```
+Must edit the path and name of the file
+
+**Replace all x with N (unknown nucleotide)**
+```bash
+sed '/^>/! s/x/N/g' monococcum_alignment.fasta > monococcum_alignment_clean.fasta
+```
+Must edit the name's file
+
+
+
+
+
+
