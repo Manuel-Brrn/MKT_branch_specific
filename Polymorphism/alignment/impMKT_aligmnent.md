@@ -410,3 +410,25 @@ for f in "$INPUT_DIR"/*_aligned_NT.fasta; do
     fi
 done > hmmcleaner_urartu_impMKT.log 2>&1
 ```
+
+**Ordonner les séquences avec la référence en première et l'outgroup en dernier:**
+```bash
+for f in *.fasta; do
+    echo "Traitement de $f..."
+    
+    # 1. Extraire T_urartu et le placer en premier (si présent)
+    seqkit grep -r -p "T_urartu" "$f" > tmp_first.fasta 2>/dev/null
+    
+    # 2. Extraire toutes les autres séquences (sauf H_vulgare et T_urartu)
+    seqkit grep -v -r -p "H_vulgare" "$f" | seqkit grep -v -r -p "T_urartu" > tmp_rest.fasta 2>/dev/null
+    
+    # 3. Extraire H_vulgare pour le mettre à la fin
+    seqkit grep -r -p "H_vulgare" "$f" > tmp_outgroup.fasta 2>/dev/null
+    
+    # 4. Fusionner dans l'ordre: T_urartu -> autres séquences -> H_vulgare
+    cat tmp_first.fasta tmp_rest.fasta tmp_outgroup.fasta > "/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/MACSE/urartu_covered/nucleotides_alignments_cleaned_hmm_cleaner/reordered_alignments/${f%.fasta}_reordered.fasta"
+    
+    # 5. Nettoyage
+    rm -f tmp_first.fasta tmp_rest.fasta tmp_outgroup.fasta
+done
+```
