@@ -847,6 +847,47 @@ rawSfs = uSfsFromFasta(multiFastaMatrix)
 formatSfs(multiFastaMatrix,rawSfs,dafFile,divFile,'/home/barrientosm/scratch/impMKT/')
 ```
 
+**Run it for all genes**
+```bash
+#!/bin/bash
+#SBATCH --job-name=sfs_from_fasta
+#SBATCH --output=sfs_%A_%a.out
+#SBATCH --error=sfs_%A_%a.err
+#SBATCH --nodes=1
+#SBATCH --mem=10G
+#SBATCH --array=1-N%10   # Remplace N par le nb de fasta
+#SBATCH --time=48:00:00
+#SBATCH --partition=agap_long
+
+# === User-defined variables ===
+indir="/path/to/input/fasta_dir"
+outdir="/path/to/output_dir"
+python_script="/path/to/sfsFromFasta.py"
+
+# Load required modules
+module load bioinfo-cirad
+module load python/3.9.6
+
+# Create output directory
+mkdir -p "$outdir"
+
+# Get list of .fasta files
+fasta_files=($indir/*.fasta)
+total_files=${#fasta_files[@]}
+
+# Check if array ID is within bounds
+if [ "$SLURM_ARRAY_TASK_ID" -le "$total_files" ]; then
+  aln="${fasta_files[$SLURM_ARRAY_TASK_ID - 1]}"
+  full=$(basename "$aln" .fasta)
+  base=$(echo "$full" | sed 's/_NT_hmm_reordered_renamed//')
+
+  echo "[$SLURM_ARRAY_TASK_ID/$total_files] Processing $aln"
+  python "$python_script" "$base" "$aln" "${outdir}/${base}_daf.tsv" "${outdir}/${base}_div.tsv" standard
+else
+  echo "Array task $SLURM_ARRAY_TASK_ID exceeds number of files ($total_files). Exiting."
+fi
+```
+
 
 **Merge results for all genes**
 ```py
