@@ -105,3 +105,42 @@ for dir in Inferred_Genetree_HOG*/HOG*/; do
   fi
 done
 ```
+
+**Get the number of jobs to run**
+
+```bash
+ls -d Inferred_Genetree_HOG*/ | wc -l
+```
+
+**Run Codeml for each alignments**
+
+```bash
+
+```
+#!/bin/bash
+#SBATCH --job-name=codeml
+#SBATCH --output=codeml_%A_%a.out
+#SBATCH --error=codeml_%A_%a.err
+#SBATCH --nodes=1
+#SBATCH --mem=10G
+#SBATCH --array=1-2057%10  # Adjust: 1-100 = 100 jobs, %10 = max 10 concurrent
+#SBATCH --time=48:00:00   # Adjust runtime as needed
+#SBATCH --partition=agap_long
+
+
+# Load modules
+module purge
+module load bioinfo-cirad paml/4.9.0
+
+# Get the HOG directory for this job array task
+dir=$(ls -d Inferred_Genetree_HOG*/HOG*/ | sed -n ${SLURM_ARRAY_TASK_ID}p)
+
+if [ -f "$dir/codeml_taskfarm_fullpath.sh" ]; then
+  echo "Running codeml in $dir"
+  cd "$dir" || exit
+  ./codeml_taskfarm_fullpath.sh
+  cd - || exit
+fi
+```
+
+
