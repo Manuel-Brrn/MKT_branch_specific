@@ -855,24 +855,24 @@ formatSfs(multiFastaMatrix,rawSfs,dafFile,divFile,'/home/barrientosm/scratch/imp
 #SBATCH --error=sfs_%A_%a.err
 #SBATCH --nodes=1
 #SBATCH --mem=10G
-#SBATCH --array=1-N%10   # Remplace N par le nb de fasta
+#SBATCH --array=1-2%2 ### replace by th enumber of alignments
 #SBATCH --time=48:00:00
 #SBATCH --partition=agap_long
 
 # === User-defined variables ===
-indir="/path/to/input/fasta_dir"
-outdir="/path/to/output_dir"
-python_script="/path/to/sfsFromFasta.py"
+indir="/home/barrientosm/scratch/impMKT"
+outdir="/home/barrientosm/scratch/impMKT/results"
+python_script="/home/barrientosm/scratch/impMKT/sfsFromFasta.py"
 
 # Load required modules
 module load bioinfo-cirad
-module load python/3.9.6
+module load python/3.9.13
 
 # Create output directory
 mkdir -p "$outdir"
 
-# Get list of .fasta files
-fasta_files=($indir/*.fasta)
+# Get list of specific .fasta files
+fasta_files=($indir/*_aligned_NT_hmm_reordered_renamed.fasta)
 total_files=${#fasta_files[@]}
 
 # Check if array ID is within bounds
@@ -882,7 +882,13 @@ if [ "$SLURM_ARRAY_TASK_ID" -le "$total_files" ]; then
   base=$(echo "$full" | sed 's/_NT_hmm_reordered_renamed//')
 
   echo "[$SLURM_ARRAY_TASK_ID/$total_files] Processing $aln"
-  python "$python_script" "$base" "$aln" "${outdir}/${base}_daf.tsv" "${outdir}/${base}_div.tsv" standard
+  
+  # Run from the directory containing the fasta file
+  cd "$indir"
+  python3 "$python_script" "$base" "$(basename "$aln")" "${base}_daf.tsv" "${base}_div.tsv" standard
+
+  # Move outputs to results dir
+  mv "${base}_daf.tsv" "${base}_div.tsv" "$outdir/"
 else
   echo "Array task $SLURM_ARRAY_TASK_ID exceeds number of files ($total_files). Exiting."
 fi
@@ -890,12 +896,17 @@ fi
 
 
 **Merge results for all genes**
+
+```py
+python3 aggregate_sfs_div.py
+```
+
 ```py
 import pandas as pd
 from glob import glob
 
 # --- SFS GLOBAL ---
-sfs_files = sorted(glob("sfs_output*.tsv"))
+sfs_files = sorted(glob("*_daf.tsv"))   # <-- tous les daf.tsv
 sfs_global = None
 
 for f in sfs_files:
@@ -909,7 +920,7 @@ for f in sfs_files:
 sfs_global.to_csv("SFS_global.tsv", sep="\t", index=False)
 
 # --- DIV GLOBAL ---
-div_files = sorted(glob("div_output*.tsv"))
+div_files = sorted(glob("*_div.tsv"))   # <-- tous les div.tsv
 div_global = None
 
 for f in div_files:
@@ -923,9 +934,6 @@ for f in div_files:
         div_global["m0"] += df["m0"]
 
 div_global.to_csv("DIV_global.tsv", sep="\t", index=False)
-
-
 ```
-
 
 
