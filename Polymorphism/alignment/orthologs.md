@@ -208,3 +208,13 @@ print ("Done, %i RBH found" % count)
 ```bash
 awk -F'\t' -v OFS='\t' 'NR>1 {gsub("T_urartu\\|","",$1); gsub("\\.","_",$1); print}' RBH.tab > RBH_processed.tab
 ```
+
+**Change fasta sequences names for secale cereale**
+```bash
+sed -E 's/^>transcript:([^ ]+) gene=.*/>S_secale|\1/' Cleaned_Secale_cereale.Rye_Lo7_2018_v1p1p1.61_cds.fasta > renamed_secale.fasta
+```
+
+**Change RBH pattern for secale cereale**
+```bash
+awk 'BEGIN{OFS="\t"} {sub(/transcript:([^ ]+) gene=.*/, "S_cereale|&", $2); gsub(/.*transcript:| gene=.*/, "", $2); $2 = "S_cereale|" $2} 1' RBH_processed.tab > RBH_renamed.tab
+```
