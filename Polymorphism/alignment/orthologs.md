@@ -211,7 +211,7 @@ awk -F'\t' -v OFS='\t' 'NR>1 {gsub("T_urartu\\|","",$1); gsub("\\.","_",$1); pri
 
 **Change fasta sequences names for secale cereale**
 ```bash
-sed -E 's/^>transcript:([^ ]+) gene=.*/>S_secale|\1/' Cleaned_Secale_cereale.Rye_Lo7_2018_v1p1p1.61_cds.fasta > renamed_secale.fasta
+sed -E 's/^>transcript:([^ ]+) gene=.*/>S_cereale|\1/' Cleaned_Secale_cereale.Rye_Lo7_2018_v1p1p1.61_cds.fasta > Cleaned_Secale_cereale_renamed.fasta
 ```
 
 **Change RBH pattern for secale cereale**
