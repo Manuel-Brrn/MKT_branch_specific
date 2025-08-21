@@ -274,6 +274,7 @@ fi
 ```
 
 **Parse Codeml output: dn_ds.py**
+*Branch model*
 ```py
 from Bio.Phylo.PAML import codeml
 from Bio import Phylo
