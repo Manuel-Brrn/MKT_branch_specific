@@ -533,9 +533,7 @@ print(f"Saved lnL file: {LNL_OUTPUT}")
 print(f"Species order: {all_species}")
 ```
 
-
-
-**Create a table contianing genes names**
+**Create a table containing genes names**
 genes_ids.py:
 example:
 head gene_table.tsv
@@ -544,7 +542,6 @@ head gene_table.tsv
 |-------------|---------------------------|----------------------------|-----------------------------|-----------------------------|-------------------------------|
 | HOG0000337  | Ammut_EIv1.0_0940420.1    | TA299.r1.7AG0177380.1      | TuG1812G0700005729.01.T01   | S_Scaffold1_G00286.t1       | AespeY2032CH7S01G775500.1     |
 | HOG0000787  | Ammut_EIv1.0_0300720.1    | TA299.r1.3AG0026920.1      | TuG1812G0300001138.01.T01   | S_Scaffold3_G01283.t1       | AespeY2032CH3S01G111200.1     |
-
 
 ```py
 #!/usr/bin/env python3
@@ -557,8 +554,8 @@ BASE_DIR = "/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIEN
 OUTPUT_FILE = os.path.join(BASE_DIR, "gene_table.tsv")
 # =========================
 
-# Espèces dans l'ordre souhaité
-species_order = ["Ae_mutica", "T_monococcum", "T_urartu", "H_vulgare", "Ae_speltoides"]
+# Espèces 
+species_order = ["Ae_mutica", "T_monococcum", "T_urartu", "Ae_speltoides", "H_vulgare"]
 
 # Récupérer tous les fichiers fasta
 fasta_files = glob.glob(os.path.join(BASE_DIR, "HOG*.fasta"))
