@@ -401,3 +401,102 @@ for i, directory in enumerate(directories, 1):
 
 print("\nAll directories processed!")
 ```
+
+**Create a summary table from codeml parsers**
+
+Summary of dn/ds
+
+summary_dn_ds_analysis.py:
+#!/usr/bin/env python3
+import os
+import glob
+import pandas as pd
+import re
+
+# ===== CONFIGURATION =====
+BASE_DIR = "/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/VESPA/alignment/translated_alignments_cleaned"
+OUTPUT_FILE = "/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/VESPA/alignment/translated_alignments_cleaned/summary_dn_ds_results.tsv"
+# =========================
+
+# Fichiers branch model (*.tab)
+branch_files = glob.glob(
+    os.path.join(BASE_DIR, "Inferred_Genetree_HOG*/HOG*/Codeml_Setup_HOG_codeml_input/cleaned_*/model_branch/Omega0_5/*_codeml.tab")
+)
+
+# Fichiers m0 model (branch_results.csv)
+m0_files = glob.glob(
+    os.path.join(BASE_DIR, "Inferred_Genetree_HOG*/HOG*/Codeml_Setup_HOG_codeml_input/cleaned/m0/Omega0_5/branch_results.csv")
+)
+
+print(f"Found {len(branch_files)} branch model files and {len(m0_files)} m0 model files.")
+
+# Résultats
+branch_results = {}  # {HOG: {"Species1_omega": omega, "Species1_lnL": lnL, "Species2_omega": omega, "Species2_lnL": lnL}}
+m0_results = {}      # {HOG: {"omega_m0": val, "lnL_m0": val}}
+
+# Charger les résultats du modèle branch
+for f in branch_files:
+    filename = os.path.basename(f)  # ex: HOG0023328_Turartu_codeml.tab
+    match = re.match(r"(HOG\d+)_(\w+)_codeml\.tab", filename)
+    if not match:
+        continue
+    hog, species = match.groups()
+
+    df = pd.read_csv(f, sep="\t")
+    lnL_branch = df["lnL"].iloc[0]        # même lnL pour toutes les lignes
+    omega_branch = df["omega_branch"].iloc[-1]  # prend la valeur différente de la branche testée
+
+    if hog not in branch_results:
+        branch_results[hog] = {}
+
+    # Ajouter les colonnes pour cette espèce
+    branch_results[hog][f"{species}_omega"] = omega_branch
+    branch_results[hog][f"{species}_lnL"] = lnL_branch
+
+# Charger les résultats du modèle m0
+for f in m0_files:
+    match = re.search(r"(HOG\d+)", f)
+    if not match:
+        continue
+    hog = match.group(1)
+
+    df = pd.read_csv(f, sep="\t")
+    omega_m0 = df["omega_branch"].iloc[0]  # identique partout
+    lnL_m0 = df["lnL"].iloc[0]             # identique partout
+
+    m0_results[hog] = {"omega_m0": omega_m0, "lnL_m0": lnL_m0}
+
+# Construire le tableau final
+all_hogs = sorted(set(branch_results.keys()) | set(m0_results.keys()))
+rows = []
+
+for hog in all_hogs:
+    row = {"HOG": hog}
+
+    # Ajouter les résultats branch
+    if hog in branch_results:
+        row.update(branch_results[hog])
+
+    # Ajouter les résultats m0
+    if hog in m0_results:
+        row.update(m0_results[hog])
+
+    rows.append(row)
+
+# Créer le DataFrame et réorganiser les colonnes
+summary_df = pd.DataFrame(rows)
+
+# Réorganiser les colonnes pour avoir HOG en premier, puis les omegas, puis les lnL
+cols = ["HOG"]
+omega_cols = [c for c in summary_df.columns if c.endswith('_omega') and c != 'omega_m0']
+lnL_cols = [c for c in summary_df.columns if c.endswith('_lnL') and c != 'lnL_m0']
+m0_cols = [c for c in summary_df.columns if c in ['omega_m0', 'lnL_m0']]
+
+# Ordonner les colonnes
+cols = cols + sorted(omega_cols) + sorted(lnL_cols) + m0_cols
+summary_df = summary_df[cols]
+
+# Sauvegarder
+summary_df.to_csv(OUTPUT_FILE, sep="\t", index=False)
+print(f"\nSummary table saved to {OUTPUT_FILE}")
+print(f"Columns: {list(summary_df.columns)}")
