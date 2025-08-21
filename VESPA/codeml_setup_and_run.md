@@ -539,12 +539,11 @@ print(f"Species order: {all_species}")
 genes_ids.py:
 example:
 head gene_table.tsv
-HOG     Ae_mutica       T_monococcum    T_urartu        H_vulgare       Ae_speltoides
-HOG0000337      Ammut_EIv1.0_0940420.1  TA299.r1.7AG0177380.1   TuG1812G0700005729.01.T01       S_Scaffold1_G00286.t1   AespeY2032CH7S01G775500.1
-HOG0000787      Ammut_EIv1.0_0300720.1  TA299.r1.3AG0026920.1   TuG1812G0300001138.01.T01       S_Scaffold3_G01283.t1   AespeY2032CH3S01G111200.1
-HOG0001252      Ammut_EIv1.0_0763490.1  TA299.r1.6AG0121160.1   TuG1812G0600003479.01.T01       S_Scaffold2_G02087.t1   AespeY2032CH6S01G453400.1
-HOG0001369      Ammut_EIv1.0_0965150.1  TA299.r1.1AG0016300.1   TuG1812G0100000653.01.T01       S_Scaffold37_G00059.t1  AespeY2032CH1S01G073100.1
-HOG0001687      Ammut_EIv1.0_0886280.1  TA299.r1.7AG0117480.1   TuG1812G0700003585.01.T01       S_Scaffold1_G02886.t1   AespeY2032CH7S01G475200.1
+
+| HOG         | Ae_mutica                 | T_monococcum               | T_urartu                    | H_vulgare                   | Ae_speltoides                |
+|-------------|---------------------------|----------------------------|-----------------------------|-----------------------------|-------------------------------|
+| HOG0000337  | Ammut_EIv1.0_0940420.1    | TA299.r1.7AG0177380.1      | TuG1812G0700005729.01.T01   | S_Scaffold1_G00286.t1       | AespeY2032CH7S01G775500.1     |
+| HOG0000787  | Ammut_EIv1.0_0300720.1    | TA299.r1.3AG0026920.1      | TuG1812G0300001138.01.T01   | S_Scaffold3_G01283.t1       | AespeY2032CH3S01G111200.1     |
 
 
 ```py
