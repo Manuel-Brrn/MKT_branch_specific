@@ -403,9 +403,8 @@ print("\nAll directories processed!")
 ```
 
 **Create a summary table from codeml parsers**
-Create two files one file with dn,ds, and omega for each branch and omega for m0 for every genes, and one file with every lnL of each branch and the lnL of the m0 model
+summary_codeml.py: Create two files one file with dn,ds, and omega for each branch and omega for m0 for every genes, and one file with every lnL of each branch and the lnL of the m0 model
 
-summary_codeml.py
 ```py
 summary_dn_ds_analysis.py:
 #!/usr/bin/env python3
