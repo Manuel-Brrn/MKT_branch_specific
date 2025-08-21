@@ -273,4 +273,124 @@ else
 fi
 ```
 
+**Parse Codeml output: dn_ds.py**
+```py
+from Bio.Phylo.PAML import codeml
+from Bio import Phylo
+import io
+import pandas as pd
+import os
+import re
 
+# Obtenir le chemin actuel et extraire les informations
+current_path = os.getcwd()
+
+# Extraire le nom du HOG et de l'espèce depuis le chemin
+hog_match = re.search(r'HOG(\d+)', current_path)
+species_match = re.search(r'cleaned_(\w+)', current_path)
+
+if hog_match and species_match:
+    hog_number = hog_match.group(0)  # HOG0023328
+    species_name = species_match.group(1)  # Turartu
+    output_filename = f"{hog_number}_{species_name}_codeml.tab"
+else:
+    output_filename = "branch_results.csv"
+
+# Charger le résultat codeml
+results = codeml.read("out")
+lnL = results["NSsites"][0]["lnL"]
+branches = results["NSsites"][0]["parameters"]["branches"]
+tree_newick = results["NSsites"][0]["tree"]
+
+# Charger l'arbre Newick avec Biopython
+tree = Phylo.read(io.StringIO(tree_newick), "newick")
+
+# Associer chaque terminal (espèce) à sa longueur de branche
+species_to_length = {term.name: term.branch_length for term in tree.get_terminals()}
+
+# Fonction : trouver l'espèce correspondant à une branche
+def match_species(branch, vals):
+    # On compare la longueur de branche (t) dans "branches" et dans l'arbre
+    for sp, length in species_to_length.items():
+        if length is None:
+            continue
+        if abs(length - vals["t"]) < 1e-6:  # tolérance flottante
+            return sp
+    return f"branch_{branch}"
+
+# Construire table
+rows = []
+for br, vals in branches.items():
+    sp = match_species(br, vals)
+    rows.append({
+        "Species": sp,
+        "Branch": br,
+        "dN_branch": vals["dN"],
+        "dS_branch": vals["dS"],
+        "omega_branch": vals["omega"],
+        "lnL": lnL
+    })
+
+df = pd.DataFrame(rows)
+print(df.to_string(index=False))
+
+# Sauvegarder avec le nom personnalisé
+df.to_csv(output_filename, sep='\t', index=False)
+print(f"\nResults saved to {output_filename}")
+```
+
+**Run: dn_ds.py in every directories**
+run_all_dn_ds.py:
+```py
+#!/usr/bin/env python3
+import os
+import glob
+import subprocess
+
+# ===== CONFIGURATION =====
+BASE_DIR = "/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/VESPA/alignment/translated_alignments_cleaned"
+DN_DS_SCRIPT = "/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/VESPA/alignment/translated_alignments_cleaned/dn_ds.py"
+# =========================
+
+# Check that dn_ds.py exists
+if not os.path.exists(DN_DS_SCRIPT):
+    print(f"ERROR: dn_ds.py not found at: {DN_DS_SCRIPT}")
+    exit(1)
+
+# Find all Omega0_5 directories
+pattern = os.path.join(
+    BASE_DIR,
+    "Inferred_Genetree_HOG*/HOG*/Codeml_Setup_HOG_codeml_input/cleaned_*/model_branch/Omega0_5"
+)
+directories = glob.glob(pattern)
+
+if not directories:
+    print("No Omega0_5 directories found.")
+    exit(0)
+
+print(f"Found {len(directories)} Omega0_5 directories to process.")
+
+# Run dn_ds.py inside each directory
+for i, directory in enumerate(directories, 1):
+    print(f"\n [{i}/{len(directories)}] Processing: {directory}")
+    try:
+        result = subprocess.run(
+            ["python3", DN_DS_SCRIPT],
+            cwd=directory,   # execute inside this Omega0_5 folder
+            capture_output=True,
+            text=True,
+            timeout=600  # 10 min timeout per dir
+        )
+
+        if result.stdout:
+            print("Output:\n", result.stdout.strip())
+        if result.stderr:
+            print("Errors:\n", result.stderr.strip())
+
+    except subprocess.TimeoutExpired:
+        print("Timeout: Script took too long")
+    except Exception as e:
+        print(f"Failed: {e}")
+
+print("\n All directories processed!")
+```
