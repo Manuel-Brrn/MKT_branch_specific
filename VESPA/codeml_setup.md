@@ -403,9 +403,10 @@ print("\nAll directories processed!")
 ```
 
 **Create a summary table from codeml parsers**
+Create two files one file with dn,ds, and omega for each branch and omega for m0 for every genes, and one file with every lnL of each branch and the lnL of the m0 model
 
-Summary of dn/ds
-
+summary_codeml.py
+```py
 summary_dn_ds_analysis.py:
 #!/usr/bin/env python3
 import os
@@ -415,7 +416,8 @@ import re
 
 # ===== CONFIGURATION =====
 BASE_DIR = "/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/VESPA/alignment/translated_alignments_cleaned"
-OUTPUT_FILE = "/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/VESPA/alignment/translated_alignments_cleaned/summary_dn_ds_results.tsv"
+DNDS_OUTPUT = os.path.join(BASE_DIR, "summary_dn_ds_wide.tsv")
+LNL_OUTPUT = os.path.join(BASE_DIR, "summary_lnL_wide.tsv")
 # =========================
 
 # Fichiers branch model (*.tab)
@@ -431,7 +433,8 @@ m0_files = glob.glob(
 print(f"Found {len(branch_files)} branch model files and {len(m0_files)} m0 model files.")
 
 # Résultats
-branch_results = {}  # {HOG: {"Species1_omega": omega, "Species1_lnL": lnL, "Species2_omega": omega, "Species2_lnL": lnL}}
+branch_results = {}  # {HOG: {species: {"dN":, "dS":, "omega":}}}
+branch_lnl = {}      # {HOG: {species: lnL}}
 m0_results = {}      # {HOG: {"omega_m0": val, "lnL_m0": val}}
 
 # Charger les résultats du modèle branch
@@ -443,15 +446,20 @@ for f in branch_files:
     hog, species = match.groups()
 
     df = pd.read_csv(f, sep="\t")
-    lnL_branch = df["lnL"].iloc[0]        # même lnL pour toutes les lignes
-    omega_branch = df["omega_branch"].iloc[-1]  # prend la valeur différente de la branche testée
+    # On prend la dernière ligne pour la branche testée
+    row = df.iloc[-1]
 
     if hog not in branch_results:
         branch_results[hog] = {}
+    if hog not in branch_lnl:
+        branch_lnl[hog] = {}
 
-    # Ajouter les colonnes pour cette espèce
-    branch_results[hog][f"{species}_omega"] = omega_branch
-    branch_results[hog][f"{species}_lnL"] = lnL_branch
+    branch_results[hog][species] = {
+        "dN": row["dN_branch"],
+        "dS": row["dS_branch"],
+        "omega": row["omega_branch"]
+    }
+    branch_lnl[hog][species] = row["lnL"]
 
 # Charger les résultats du modèle m0
 for f in m0_files:
@@ -461,42 +469,67 @@ for f in m0_files:
     hog = match.group(1)
 
     df = pd.read_csv(f, sep="\t")
-    omega_m0 = df["omega_branch"].iloc[0]  # identique partout
-    lnL_m0 = df["lnL"].iloc[0]             # identique partout
+    row = df.iloc[0]  # m0 a une seule valeur
+    m0_results[hog] = {"omega_m0": row["omega_branch"], "lnL_m0": row["lnL"]}
 
-    m0_results[hog] = {"omega_m0": omega_m0, "lnL_m0": lnL_m0}
-
-# Construire le tableau final
+# Construire les tableaux finaux
 all_hogs = sorted(set(branch_results.keys()) | set(m0_results.keys()))
-rows = []
+dn_ds_rows = []
+lnl_rows = []
+
+# Liste de toutes les espèces pour ordonner les colonnes
+all_species = sorted(set(
+    species for hog_data in branch_results.values()
+    for species in hog_data.keys()
+))
 
 for hog in all_hogs:
-    row = {"HOG": hog}
+    dn_ds_row = {"HOG": hog}
+    lnl_row = {"HOG": hog}
 
-    # Ajouter les résultats branch
-    if hog in branch_results:
-        row.update(branch_results[hog])
+    # Ajouter les données pour chaque espèce (dans l'ordre)
+    for species in all_species:
+        if hog in branch_results and species in branch_results[hog]:
+            dn_ds_row[f"{species}_dN"] = branch_results[hog][species]["dN"]
+            dn_ds_row[f"{species}_dS"] = branch_results[hog][species]["dS"]
+            dn_ds_row[f"{species}_omega"] = branch_results[hog][species]["omega"]
 
-    # Ajouter les résultats m0
+        if hog in branch_lnl and species in branch_lnl[hog]:
+            lnl_row[f"{species}_lnL"] = branch_lnl[hog][species]
+
+    # Ajouter le modèle m0
     if hog in m0_results:
-        row.update(m0_results[hog])
+        dn_ds_row["omega_m0"] = m0_results[hog]["omega_m0"]
+        lnl_row["lnL_m0"] = m0_results[hog]["lnL_m0"]
 
-    rows.append(row)
+    dn_ds_rows.append(dn_ds_row)
+    lnl_rows.append(lnl_row)
 
-# Créer le DataFrame et réorganiser les colonnes
-summary_df = pd.DataFrame(rows)
+# Créer les DataFrames
+dn_ds_df = pd.DataFrame(dn_ds_rows)
+lnl_df = pd.DataFrame(lnl_rows)
 
-# Réorganiser les colonnes pour avoir HOG en premier, puis les omegas, puis les lnL
-cols = ["HOG"]
-omega_cols = [c for c in summary_df.columns if c.endswith('_omega') and c != 'omega_m0']
-lnL_cols = [c for c in summary_df.columns if c.endswith('_lnL') and c != 'lnL_m0']
-m0_cols = [c for c in summary_df.columns if c in ['omega_m0', 'lnL_m0']]
+# Ordonner les colonnes pour dn_ds
+dn_ds_cols = ["HOG"]
+for species in all_species:
+    dn_ds_cols.extend([f"{species}_dN", f"{species}_dS", f"{species}_omega"])
+dn_ds_cols.append("omega_m0")
 
-# Ordonner les colonnes
-cols = cols + sorted(omega_cols) + sorted(lnL_cols) + m0_cols
-summary_df = summary_df[cols]
+# Ordonner les colonnes pour lnl
+lnl_cols = ["HOG"]
+for species in all_species:
+    lnl_cols.append(f"{species}_lnL")
+lnl_cols.append("lnL_m0")
+
+# Garder seulement les colonnes qui existent
+dn_ds_df = dn_ds_df[[col for col in dn_ds_cols if col in dn_ds_df.columns]]
+lnl_df = lnl_df[[col for col in lnl_cols if col in lnl_df.columns]]
 
 # Sauvegarder
-summary_df.to_csv(OUTPUT_FILE, sep="\t", index=False)
-print(f"\nSummary table saved to {OUTPUT_FILE}")
-print(f"Columns: {list(summary_df.columns)}")
+dn_ds_df.to_csv(DNDS_OUTPUT, sep="\t", index=False)
+lnl_df.to_csv(LNL_OUTPUT, sep="\t", index=False)
+
+print(f"Saved DN/DS file: {DNDS_OUTPUT}")
+print(f"Saved lnL file: {LNL_OUTPUT}")
+print(f"Species order: {all_species}")
+```
