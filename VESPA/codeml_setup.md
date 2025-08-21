@@ -274,7 +274,7 @@ fi
 ```
 
 **Parse Codeml output: dn_ds.py**
-*Branch model*
+*Branch model and model m0*
 ```py
 from Bio.Phylo.PAML import codeml
 from Bio import Phylo
@@ -340,7 +340,7 @@ df.to_csv(output_filename, sep='\t', index=False)
 print(f"\nResults saved to {output_filename}")
 ```
 
-**Run: dn_ds.py in every directories**
+**Run: dn_ds.py in every directories branch and m0 model**
 run_all_dn_ds.py:
 ```py
 #!/usr/bin/env python3
@@ -358,12 +358,18 @@ if not os.path.exists(DN_DS_SCRIPT):
     print(f"ERROR: dn_ds.py not found at: {DN_DS_SCRIPT}")
     exit(1)
 
-# Find all Omega0_5 directories
-pattern = os.path.join(
-    BASE_DIR,
-    "Inferred_Genetree_HOG*/HOG*/Codeml_Setup_HOG_codeml_input/cleaned_*/model_branch/Omega0_5"
-)
-directories = glob.glob(pattern)
+# Find all Omega0_5 directories - CORRECTION ICI
+patterns = [
+    os.path.join(BASE_DIR, "Inferred_Genetree_HOG*/HOG*/Codeml_Setup_HOG_codeml_input/cleaned_*/model_branch/Omega0_5"),
+    os.path.join(BASE_DIR, "Inferred_Genetree_HOG*/HOG*/Codeml_Setup_HOG_codeml_input/cleaned/m0/Omega0_5")
+]
+
+directories = []
+for pattern in patterns:
+    directories.extend(glob.glob(pattern))
+
+# Remove duplicates
+directories = list(set(directories))
 
 if not directories:
     print("No Omega0_5 directories found.")
@@ -373,7 +379,7 @@ print(f"Found {len(directories)} Omega0_5 directories to process.")
 
 # Run dn_ds.py inside each directory
 for i, directory in enumerate(directories, 1):
-    print(f"\n [{i}/{len(directories)}] Processing: {directory}")
+    print(f"\n🔹 [{i}/{len(directories)}] Processing: {directory}")
     try:
         result = subprocess.run(
             ["python3", DN_DS_SCRIPT],
@@ -393,5 +399,5 @@ for i, directory in enumerate(directories, 1):
     except Exception as e:
         print(f"Failed: {e}")
 
-print("\n All directories processed!")
+print("\nAll directories processed!")
 ```
