@@ -490,7 +490,7 @@ done > hmmcleaner_urartu_impMKT.log 2>&1
 cp *NT_hmm.fasta* /path/nucleotides_alignments_cleaned_hmm_cleaner/
 ```
 
-**Identify with pattern the reference sequences**
+**Identify with species name the reference sequences**
 ```bash
 for f in *.fasta; do sed -i '/^>/ { /|/! s/>/>Ae_speltoides|/ }' "$f"; done
 ```
@@ -519,6 +519,10 @@ for f in *.fasta; do
 done
 ```
 
+**Put the species names of the reference at the end**
+```bash
+for f in *.fasta; do sed -i '/^>Ae_speltoides|/ s/>Ae_speltoides|\(.*\)/>\1|Ae_speltoides/' "$f"; done
+```
 
 **Rename_sequences for dndspinpis**
 ```bash
