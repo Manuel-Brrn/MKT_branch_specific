@@ -690,6 +690,20 @@ find . -name "*.fasta" -type f -size 0 -delete
 pip install amas
 find ~/.local/lib/python3.9/site-packages -name "AMAS.py"
 python3 /home/barrientosm/.local/lib/python3.9/site-packages/amas/AMAS.py summary -f fasta -d dna -i *.fasta
+#### sbatch script
+#!/bin/bash
+#SBATCH --job-name=AMAS
+#SBATCH --output=AMAS.out
+#SBATCH --error=AMAS.err
+#SBATCH --nodes=1
+#SBATCH --mem=10G
+#SBATCH --time=20:00:00
+#SBATCH --partition=agap_normal
+
+module load bioinfo-cirad
+module load python/3.9.13
+
+python3 /home/barrientosm/.local/lib/python3.9/site-packages/amas/AMAS.py summary -f fasta -d dna -i *.fasta
 ```
  
 **Merge all alignments**
