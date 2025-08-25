@@ -706,16 +706,10 @@ module load python/3.9.13
 python3 /home/barrientosm/.local/lib/python3.9/site-packages/amas/AMAS.py summary -f fasta -d dna -i *.fasta
 ```
  
-**Merge all alignments**
-```bash
-cat *.fasta > /home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/dNdSpiNpiS/monococcum_covered/dNdSpiNpiS_input/monococcum_alignment.fasta
-```
-Must edit the path and name of the file
+
 
 **Replace all x with N (unknown nucleotide)**
 ```bash
-sed '/^>/! s/x/N/g' monococcum_alignment.fasta > monococcum_alignment_clean.fasta
-
 ###### separately for every fasta
 for fasta_file in *.fasta; do
     sed '/^>/! s/x/N/g' "$fasta_file" > "${fasta_file%.fasta}_clean.fasta"
@@ -951,52 +945,356 @@ rawSfs = uSfsFromFasta(multiFastaMatrix)
 formatSfs(multiFastaMatrix,rawSfs,dafFile,divFile,'/home/barrientosm/scratch/impMKT/')
 ```
 
-**Run it for all genes**
-```bash
-#!/bin/bash
-#SBATCH --job-name=sfs_from_fasta
-#SBATCH --output=sfs_%A_%a.out
-#SBATCH --error=sfs_%A_%a.err
-#SBATCH --nodes=1
-#SBATCH --mem=10G
-#SBATCH --array=1-2%2 ### replace by th enumber of alignments
-#SBATCH --time=48:00:00
-#SBATCH --partition=agap_long
+**Version that allows 10% of N**
+```py
+#!/usr/bin/env python3
+import sys
+import time
+import numpy as np
+import pandas as pd
+import pyfaidx as px
+import pybedtools
 
-# === User-defined variables ===
-indir="/home/barrientosm/scratch/impMKT"
-outdir="/home/barrientosm/scratch/impMKT/results"
-python_script="/home/barrientosm/scratch/impMKT/sfsFromFasta.py"
+###############################
+# CODON DEGENERACY
+###############################
+def degenerancy(data,codonDict):
 
-# Load required modules
-module load bioinfo-cirad
-module load python/3.9.13
+    # DEGENERANCY DICTIONARIES
+    standardDict = {
+        'TTT': '002', 'TTC': '002', 'TTA': '202', 'TTG': '202',
+        'TCT': '004', 'TCC': '004', 'TCA': '004', 'TCG': '004',
+        'TAT': '002', 'TAC': '002', 'TAA': '022', 'TAG': '002',
+        'TGT': '002', 'TGC': '002', 'TGA': '020', 'TGG': '000',
+        'CTT': '004', 'CTC': '004', 'CTA': '204', 'CTG': '204',
+        'CCT': '004', 'CCC': '004', 'CCA': '004', 'CCG': '004',
+        'CAT': '002', 'CAC': '002', 'CAA': '002', 'CAG': '002',
+        'CGT': '004', 'CGC': '004', 'CGA': '204', 'CGG': '204',
+        'ATT': '003', 'ATC': '003', 'ATA': '003', 'ATG': '000',
+        'ACT': '004', 'ACC': '004', 'ACA': '004', 'ACG': '004',
+        'AAT': '002', 'AAC': '002', 'AAA': '002', 'AAG': '002',
+        'AGT': '002', 'AGC': '002', 'AGA': '202', 'AGG': '202',
+        'GTT': '004', 'GTC': '004', 'GTA': '004', 'GTG': '004',
+        'GCT': '004', 'GCC': '004', 'GCA': '004', 'GCG': '004',
+        'GAT': '002', 'GAC': '002', 'GAA': '002', 'GAG': '002',
+        'GGT': '004', 'GGC': '004', 'GGA': '004', 'GGG': '004'}
 
-# Create output directory
-mkdir -p "$outdir"
+    if(codonDict == 'standard'):
+        degenerateCodonTable = standardDict
 
-# Get list of specific .fasta files
-fasta_files=($indir/*_aligned_NT_hmm_reordered_renamed.fasta)
-total_files=${#fasta_files[@]}
+    degenerancy = ''
+    for i in range(0, len(data),3):
+        codon = data[i:i+3]
+        if('N' in codon or '-' in codon):
+            degenerancy += codon
+        else:
+            degenerancy += degenerateCodonTable.get(codon,'NNN')  # safer
 
-# Check if array ID is within bounds
-if [ "$SLURM_ARRAY_TASK_ID" -le "$total_files" ]; then
-  aln="${fasta_files[$SLURM_ARRAY_TASK_ID - 1]}"
-  full=$(basename "$aln" .fasta)
-  base=$(echo "$full" | sed 's/_NT_hmm_reordered_renamed//')
+    return(degenerancy)
 
-  echo "[$SLURM_ARRAY_TASK_ID/$total_files] Processing $aln"
-  
-  # Run from the directory containing the fasta file
-  cd "$indir"
-  python3 "$python_script" "$base" "$(basename "$aln")" "${base}_daf.tsv" "${base}_div.tsv" standard
+###############################
+# SEQUENCES TO MATRIX
+###############################
+def sequencesToMatrix(multiFasta, codonTable, split=None, N_threshold=0.1):
+    # logging
+    seq_filters = {
+        'removed_length_mismatch': 0,
+        'removed_too_many_Ns': 0,
+        'kept_sequences': 0
+    }
 
-  # Move outputs to results dir
-  mv "${base}_daf.tsv" "${base}_div.tsv" "$outdir/"
-else
-  echo "Array task $SLURM_ARRAY_TASK_ID exceeds number of files ($total_files). Exiting."
-fi
+    samples = list(multiFasta.keys())
+
+    if split is None:
+        seqLen = len(multiFasta[samples[0]][:].seq)
+
+        if((seqLen % 3) != 0):
+            sys.exit('cdsLength')
+
+        # Create empty array
+        matrix = np.empty([len(samples), seqLen], dtype='str')
+        deleteIndex = list()
+
+        for i in range(1,len(samples),1):
+            tmp = multiFasta[samples[i]][:].seq
+            if(len(tmp) != seqLen):
+                seq_filters['removed_length_mismatch'] += 1
+                deleteIndex.append(i)
+                continue
+            if(tmp.count('N')/len(tmp) > N_threshold):
+                seq_filters['removed_too_many_Ns'] += 1
+                deleteIndex.append(i)
+            else:
+                matrix[i] = list(tmp)
+                seq_filters['kept_sequences'] += 1
+
+        # Delete sequences
+        matrix = np.delete(matrix,deleteIndex,0)
+
+        degenCode = degenerancy(multiFasta[samples[0]][:].seq,codonTable)
+        matrix[0] = list(degenCode)
+
+        # Keep only 0-fold / 4-fold
+        matrix = np.asarray(matrix[:,(matrix[0]=='0') | (matrix[0]=='4')],order='C')
+
+        print("Sequence filtering summary:", seq_filters)
+        return(matrix, seq_filters)
+
+    else:
+        # region split mode
+        split = [split[0]+1,split[1]+1]
+        matrix = np.empty([len(samples),(split[1]-split[0]+1)],dtype='str')
+        deleteIndex = list()
+
+        for i in range(1,len(samples),1):
+            tmp = multiFasta.get_spliced_seq(samples[i], [split]).seq
+            if tmp.count('N')/len(tmp) > N_threshold:
+                seq_filters['removed_too_many_Ns'] += 1
+                deleteIndex.append(i)
+            else:
+                matrix[i] = list(tmp)
+                seq_filters['kept_sequences'] += 1
+
+        matrix = np.delete(matrix,deleteIndex,0)
+
+        degenCode = degenerancy(multiFasta.get_spliced_seq(samples[0], [split]).seq.upper(),codonTable)
+        matrix[0] = list(degenCode)
+
+        matrix = np.asarray(matrix[:,(matrix[0]=='0') | (matrix[0]=='4')],order='C')
+
+        print("Sequence filtering summary:", seq_filters)
+        return(matrix, seq_filters)
+
+###############################
+# uSFS CALCULATION
+###############################
+def uSfsFromFasta(sequenceMatrix):
+    output = []
+    site_filters = {
+        'removed_sites_noAA': 0,
+        'removed_sites_withN': 0,
+        'removed_sites_monomorphic': 0,
+        'retained_polymorphic': 0,
+        'retained_divergent': 0
+    }
+
+    for x in np.nditer(sequenceMatrix, order='F', flags=['external_loop']):
+        degen = x[0]
+        AA = x[-1]
+
+        if AA in ['N','-']:
+            site_filters['removed_sites_noAA'] += 1
+            continue
+        elif 'N' in x[1:-1] or '-' in x[1:-1]:
+            site_filters['removed_sites_withN'] += 1
+            continue
+        elif np.unique(x[1:][np.where(x[1:]!='N')]).shape[0] == 1:
+            site_filters['removed_sites_monomorphic'] += 1
+            continue
+        else:
+            pol = x[1:-1]
+            functionalClass = '4fold' if degen == '4' else '0fold'
+
+            if (np.unique(pol).shape[0] == 1) and (np.unique(pol)[0] != AA):
+                div = 1; AF = 0
+                site_filters['retained_divergent'] += 1
+            else:
+                AN = x[1:-1].shape[0]
+                AC = pd.DataFrame(
+                    data=np.unique(x[1:-1], return_counts=True)[1],
+                    index=np.unique(x[1:-1], return_counts=True)[0]
+                )
+                div = 0
+                if AA not in AC.index:
+                    continue
+                AC = AC[AC.index!=AA]
+                if len(AC) == 0:
+                    continue
+                AF = AC.iloc[0]/AN
+                AF = AF.iloc[0]
+                site_filters['retained_polymorphic'] += 1
+
+            tmp = [AF,div,functionalClass]
+            output.append(tmp)
+
+    print("Site filtering summary:", site_filters)
+    return output, site_filters
+
+###############################
+# FORMAT SFS
+###############################
+def formatSfs(sequenceMatrix,rawSfsOutput,dafFile,divFile,path,append=True):
+
+    df = pd.DataFrame(rawSfsOutput)
+    df['id'] = 'uploaded'
+    df.columns = ['derivedAlleleFrequency','d','functionalClass','id']
+
+    # Extract divergence data
+    div = df[['id','functionalClass','d']]
+    div = div[div['d']!=0]
+    div = div.groupby(['id','functionalClass'])['d'].count().reset_index()
+    div = div.pivot_table(index=['id'],columns=['functionalClass'],values='d').reset_index()
+    try:
+        div = div[['0fold','4fold']]
+    except:
+        if('4fold' in div.columns):
+            div = div[['4fold']]
+            div['0fold'] = 0
+        elif('0fold' in div.columns):
+            div = div[['0fold']]
+            div['4fold'] = 0
+
+    div['mi'] =  sequenceMatrix[0][np.where(sequenceMatrix[0]=='0')].shape[0]
+    div['m0'] =  sequenceMatrix[0][np.where(sequenceMatrix[0]=='4')].shape[0]
+    div.columns = ['Di','D0','mi','m0']
+
+    # Create SFS pd.DataFrame by functionClass and 20 frequency bin
+    daf = df[df['d']!=1][['derivedAlleleFrequency','functionalClass','id']]
+    bins = np.arange(0.025,1.05,0.05)
+    labels = np.arange(0.025,1.0,0.05).tolist()
+    daf['categories'] = pd.cut(daf['derivedAlleleFrequency'],bins=bins,labels=labels)
+    daf = daf.groupby(['functionalClass','id','categories']).count().reset_index()
+    sfs = pd.DataFrame({'daf':daf['categories'].unique(),
+                        'P0':daf[daf['functionalClass']=='4fold']['derivedAlleleFrequency'].reset_index(drop=True),
+                        'Pi':daf[daf['functionalClass']=='0fold']['derivedAlleleFrequency'].reset_index(drop=True)})
+
+    sfs = sfs[['daf','P0','Pi']]
+    sfs['P0'] = sfs['P0'].fillna(0)
+    sfs['Pi'] = sfs['Pi'].fillna(0)
+    sfs['daf'] = sfs['daf'].apply(lambda x: round(x,3))
+
+    if(append is True):
+        sfs.to_csv(path + dafFile,sep='\t',header=True,index=False,mode='a')
+        div.to_csv(path + divFile,sep='\t',header=True,index=False,mode='a')
+    else:
+        sfs.to_csv(path + dafFile,sep='\t',header=True,index=False)
+        div.to_csv(path + divFile,sep='\t',header=True,index=False)
+
+###############################
+# MAIN
+###############################
+if __name__ == "__main__":
+    start = time.time()
+    analysis=sys.argv[1]
+    multiFasta = sys.argv[2]
+    dafFile = sys.argv[3]
+    divFile = sys.argv[4]
+    codonTable = sys.argv[5]
+
+    # Open multi-Fasta
+    file = px.Fasta(multiFasta, duplicate_action='first',
+                    sequence_always_upper=True, read_long_names=True)
+
+    # Create ndarray with sequences
+    multiFastaMatrix, seq_filters = sequencesToMatrix(file, codonTable)
+
+    if(multiFastaMatrix.shape[0] < 4):
+        sys.exit('numberOfLines')
+
+    # Estimating SFS
+    rawSfs, site_filters = uSfsFromFasta(multiFastaMatrix)
+
+    # Format & save
+    formatSfs(multiFastaMatrix,rawSfs,dafFile,divFile,'./')
+
+    print("Run finished in", round(time.time()-start,2), "seconds.")
+
 ```
+
+**Run python script**
+```bash
+for f in *.fasta; do
+    echo "Processing $f"
+    python3 sfs_corrected.py \
+        analysis \
+        "$f" \
+        "$(basename $f .fasta)_daf.tsv" \
+        "$(basename $f .fasta)_div.tsv" \
+        standard
+done
+```
+
+**Asses if there is enough polymophism**
+
+Vérifie les conditions :
+
+au moins 5 sites polymorphiques (P0+Pi ≥ 5),
+
+au moins 1 P0 et 1 Pi non nuls.
+
+Crée un dossier available_data/.
+
+Pour chaque fichier qui passe le filtre :
+
+Copie tous les fichiers ayant le même basename (.fasta, _daf.tsv, _div.tsv, etc.) dans available_data/.
+
+Produit un tableau récapitulatif summary.tsv avec :
+
+Nom de base,
+
+Total P0, total Pi, total polymorphismes,
+
+Statut (PASS ou FAIL).
+
+```py
+
+#!/usr/bin/env python3
+import pandas as pd
+import glob
+import os
+import shutil
+
+# Paramètres
+input_dir = "/storage/replicated/cirad/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/MACSE/monococcum_covered_impMKT_secale/nucleotides_alignments_cleaned_hmm_cleaner/reordered_alignments/renamed_header/cleaned_final/test"                  # dossier où sont tes fichiers
+output_dir = "/storage/replicated/cirad/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/MACSE/monococcum_covered_impMKT_secale/nucleotides_alignments_cleaned_hmm_cleaner/reordered_alignments/renamed_header/cleaned_final/test/available_data"    # dossier de sortie
+summary_file = "summary.tsv"     # tableau récapitulatif
+
+
+# Créer le dossier de sortie
+os.makedirs(output_dir, exist_ok=True)
+
+summary = []
+
+# Parcourir tous les fichiers _daf.tsv
+for daf_file in glob.glob(os.path.join(input_dir, "*_daf.tsv")):
+    base = os.path.basename(daf_file).replace("_daf.tsv", "")
+    
+    try:
+        df = pd.read_csv(daf_file, sep="\t")
+    except Exception as e:
+        print(f"⚠️ Erreur lecture {daf_file}: {e}")
+        continue
+
+    # Conversion explicite en numérique
+    df["P0"] = pd.to_numeric(df["P0"], errors="coerce").fillna(0)
+    df["Pi"] = pd.to_numeric(df["Pi"], errors="coerce").fillna(0)
+
+    total_P0 = df["P0"].sum()
+    total_Pi = df["Pi"].sum()
+    total = total_P0 + total_Pi
+    
+    # Vérification des critères
+    if total >= 5 and total_P0 > 0 and total_Pi > 0:
+        status = "PASS"
+        
+        # Copier tous les fichiers avec le même basename
+        pattern = os.path.join(input_dir, base + "*")
+        for f in glob.glob(pattern):
+            shutil.copy(f, output_dir)
+    else:
+        status = "FAIL"
+    
+    summary.append([base, int(total_P0), int(total_Pi), int(total), status])
+
+# Écrire le tableau récapitulatif
+summary_df = pd.DataFrame(summary, columns=["Gene","P0","Pi","Total","Status"])
+summary_df.to_csv(summary_file, sep="\t", index=False)
+
+print(f"\n Analyse terminée. Résultats dans {summary_file}")
+print(f" Données filtrées copiées dans {output_dir}/")
+```
+
+
 
 
 **Merge results for all genes**
