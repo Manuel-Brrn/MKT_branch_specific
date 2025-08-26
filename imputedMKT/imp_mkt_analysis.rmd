@@ -1,0 +1,586 @@
+
+
+
+---
+title: "impMKT"
+author: "Manuel_Barrientos"
+date: "26/08/2025"
+output:
+  html_document:
+    theme: flatly
+    highlight: tango
+    toc: yes
+    toc_depth: 2
+    code_folding: hide
+    df_print: paged
+  pdf_document:
+    toc: yes
+    toc_depth: '2'
+---
+
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(
+  cache = FALSE,
+  echo = FALSE,      # Hide the R code
+  message = FALSE,   # Hide loading messages
+  warning = FALSE,   # Hide warnings
+  fig.align = 'center', # Center figures
+  fig.width = 8,     # Set figure width
+  fig.height = 6     # Set figure height
+)
+
+```
+
+```{r setup_cran, include=FALSE}
+# Set CRAN mirror to avoid installation errors
+chooseCRANmirror(graphics = FALSE, ind = 1)
+```
+
+
+```{r packages, include=TRUE}
+
+library(iMKT)
+library(ggfortify)
+
+library(tidyverse)
+library(ggplot2)
+
+
+```
+
+```{r function}
+
+
+
+imputedMKT = function(daf, divergence, listCutoffs, plot=FALSE) {
+  
+  ## Check data
+  check = checkInput(daf, divergence, 0, 1)
+  if(check$data == FALSE)
+  {
+    stop(check$print_errors) 
+  }
+  
+  ## Declare output lists and data frames
+  output     = list()
+  mktTables  = list()
+  divMetrics = list()
+  divCutoff  = list()
+  
+  ##Polymorphism and Divergence variables
+  P0 = sum(daf[['P0']])
+  Pi = sum(daf[['Pi']])
+  D0 = divergence[['D0']]
+  Di = divergence[['Di']]
+  m0 = divergence[['m0']]
+  mi = divergence[['mi']]
+  
+  ## MKT tables
+  mktTableStandard = data.frame(Polymorphism = c(sum(daf[['P0']]), sum(daf[['Pi']])), Divergence = c(D0,Di),row.names = c("Neutral class","Selected class"))
+  
+  ## Divergence metrics
+  Ka              = Di/mi
+  Ks              = D0/m0
+  omega           = Ka/Ks
+  
+  ## Estimation of alpha
+  # alpha = 1 - ((Pi/P0)*(D0/Di))
+  # alphaC = 1 - ((PiNeutral/P0)*(mktTableStandard[1,2]/mktTableStandard[2,2]))
+  alphaCorrected <- list()
+  fractions <- list()
+  for (c in listCutoffs) {
+    
+    ## Estimating alpha with Pi/P0 ratio 
+    PiMinus     = sum(daf[daf[['daf']] <= c,'Pi'])
+    PiGreater   = sum(daf[daf[['daf']] > c,'Pi'])
+    P0Minus     = sum(daf[daf[['daf']] <= c,'P0'])
+    P0Greater   = sum(daf[daf[['daf']] > c,'P0'])
+    
+    ratioP0     = P0Minus/P0Greater
+    deleterious = PiMinus - (PiGreater * ratioP0)
+    PiNeutral = Pi - deleterious
+    
+    alphaC = 1 - (((Pi - deleterious)/P0)*(D0/Di))
+    
+    
+    ## Estimation of b: weakly deleterious
+    b    = (deleterious/P0)*(m0/mi)
+    
+    ## Estimation of f: neutral sites
+    f = (m0*PiNeutral)/(as.numeric(mi)*as.numeric(P0))
+    
+    ## Estimation of d, strongly deleterious sites
+    d = 1 - (f+b)
+    
+    ## Fisher exact test p-value from the MKT
+    m      = matrix(c(P0,(Pi - deleterious),D0,Di), ncol=2)
+    pvalue = fisher.test(round(m))$p.value
+    
+    ## Omega A and Omega D
+    omegaA = omega * alphaC
+    omegaD = omega - omegaA
+    
+    ## Store output  
+    alphaCorrected[[paste0('cutoff=',c)]] = c(c, alphaC, pvalue)
+    fractions[[paste0('cutoff=',c)]] = c(c, d, f, b)
+    divCutoff[[paste0('cutoff=',c)]] = c(c, Ka,Ks,omegaA, omegaD)
+    # mktTables[[paste0('cutoff=',c)]]  = mktTableCleaned
+  }
+  
+  ## Fractions
+  # names(fraction) = 'Correction'
+  
+  ## Store output 
+  ## Output format
+  output[['mktTable']]                 = mktTableStandard 
+  output[['alphaCorrected']]           = as.data.frame(do.call('rbind',alphaCorrected))
+  colnames(output[['alphaCorrected']]) = c('cutoff', 'alphaCorrected', 'pvalue')
+  ## Divergence metricss
+  divCutoff                            = as.data.frame(do.call('rbind',divCutoff))
+  names(divCutoff)                     = c('cutoff', 'Ka','Ks','omegaA', 'omegaD')
+  output[['divMetrics']]               = list('metricsByCutoff'=divCutoff)
+  output[['fractions']]                = as.data.frame(do.call('rbind',fractions))
+  names(output[['fractions']])                     = c('cutoff', 'd','f','b')
+  
+  # DivCutoff                     = data.frame('omegaA' = omegaA, 'omegaD' = omegaD)
+  # output[['divMetrics']]        = list(DivTable, DivCutoff)
+  # names(output[['divMetrics']]) = c("Global metrics", "Estimates by cutoff")
+  # Results table
+  # output = as.data.frame(do.call("rbind",output))
+  # colnames(output) = c("cutoff", "alpha", "pvalue")
+  
+  # Divergence metrics
+  # DivCutoff = as.data.frame(do.call("rbind",DivCutoff))
+  # names(DivCutoff) = c("omegaA", "omegaD")
+  
+  ## Render plot
+  if (plot == TRUE) {
+    
+    ## Cut-offs graph
+    # plot = ggplot(output, aes(x=as.factor(cutoff), y=alpha, group=1)) +
+    # 	geom_line(color="#386cb0") + 
+    # 	geom_point(size=2.5, color="#386cb0")+
+    # 	themePublication() +
+    # 	xlab("Cut-off") + ylab(expression(bold(paste("Adaptation (",alpha,")")))) 
+    
+    ## Re-format outputs
+    # output = output[,c(2,3)]
+    # names(output) = c("alpha.symbol","Fishers exact test P-value")
+    # DivCutoff = DivCutoff[,c(2,3)]
+    # colnames(DivCutoff) = c("omegaA.symbol", "omegaD.symbol")
+    # DivMetrics = list(DivTable, DivCutoff)
+    # names(DivMetrics) = c("Global metrics", "Estimates by cutoff")
+    
+    ## Melt fractions data
+    plotAlpha = ggplot(output[['alphaCorrected']], aes(x=as.factor(cutoff), y=alphaCorrected, group=1)) +
+      geom_line(color="#386cb0") + 
+      geom_point(size=2.5, color="#386cb0")+
+      themePublication() +
+      xlab("Cut-off") + ylab(expression(bold(paste("Adaptation (",alpha,")"))))
+    
+    ## Fractions graph
+    i = which.max(output$alphaCorrected$alphaCorrected)
+    fractionsMelt = output[['fractions']][i,2:4]
+    fractionsMelt = reshape2::melt(fractionsMelt, id.vars=NULL) 
+    fractionsMelt[['test']] = rep(c('imputedMKT'),3)
+    
+    plotFraction = ggplot(fractionsMelt) + geom_bar(stat="identity", aes_string(x="test", y="value", fill="variable"), color="black") +
+      coord_flip() + themePublication() + ylab(label="Fraction") + xlab(label="Cut-off") +
+      scale_fill_manual(values=c("#386cb0","#fdb462","#7fc97f","#ef3b2c","#662506","#a6cee3","#fb9a99","#984ea3","#ffff33"), breaks=c("f","d","b"), labels=c(expression(italic("f")),expression(italic("d")),expression(italic("b")))) +
+      theme(axis.line=element_blank()) + scale_y_discrete(limit=seq(0,1,0.25), expand=c(0,0))
+    
+    plotEmkt = plot_grid(plotAlpha, plotFraction, nrow=2,  labels=c('A','B'), rel_heights=c(2,1))
+    
+    output[['graph']] = plotEmkt
+    
+    # plot = plot_grid(plot, plotfraction, nrow=2, labels=c("A","B"), rel_heights=c(2,1))
+    
+    ## Return list output  
+    # output[['Graph']] = plot
+    # names(listOutput) = c("Results","Graph", "Divergence metrics", "MKT tables","Fractions")
+    
+    return(output)
+    
+    ## If no plot to render
+  } else if (plot==FALSE) {
+    ## Re-format outputs
+    # output = output[,c(2,3)]
+    # names(output) = c("alpha.symbol","Fishers exact test P-value")
+    # DivCutoff = DivCutoff[,c(2,3)]
+    # colnames(DivCutoff) = c("omegaA.symbol", "omegaD.symbol")
+    # DivMetrics = list(DivTable, DivCutoff)
+    # names(DivMetrics) = c("Global metrics", "Estimates by cutoff")
+    
+    # ## Melt fractions data
+    # fractionsMelt = melt(fractions, id.vars=NULL) 
+    # fractionsMelt$Fraction =  rep(c("d", "f", "b"),length(fractionsMelt$variable)/3)
+    
+    # ## Return list output  
+    # listOutput = list(output, DivMetrics, mktTables, fractions)
+    # names(listOutput) = c("Results", "Divergence metrics", "MKT tables","Fractions")
+    
+    return(output)
+  }
+  
+}
+
+
+```
+
+
+
+```{r monococcum all_genes}
+setwd("C:/Users/barrientos/Documents/data/impMKT/monococcum")
+
+DIV_global_monococcum <- read_delim("DIV_global.tsv", 
+    delim = "\t", escape_double = FALSE, 
+    trim_ws = TRUE)
+DIV_global_monococcum
+
+SFS_global_monococcum <- read_delim("SFS_global.tsv", 
+    delim = "\t", escape_double = FALSE, 
+    trim_ws = TRUE)
+SFS_global_monococcum
+
+
+imputedMKT(daf=SFS_global_monococcum, divergence=DIV_global_monococcum,listCutoffs=c(0.05))
+
+
+
+```
+
+
+
+```{r monococcum}
+
+
+
+
+
+setwd("C:/Users/barrientos/Documents/data/impMKT/monococcum")
+
+
+# Lister tous les fichiers
+all_files <- list.files(pattern = "\\.tsv$")
+
+# Extraire les IDs uniques (noms de base sans _daf.tsv ou _div.tsv)
+file_ids <- unique(gsub("_(daf|div)\\.tsv$", "", all_files))
+
+# Initialiser une liste pour stocker les résultats
+all_results <- list()
+
+# Boucle sur chaque ID
+for (file_id in file_ids) {
+  # Construire les noms de fichiers
+  daf_file <- paste0(file_id, "_daf.tsv")
+  div_file <- paste0(file_id, "_div.tsv")
+  
+  # Vérifier que les deux fichiers existent
+  if (daf_file %in% all_files && div_file %in% all_files) {
+    cat("Traitement de:", file_id, "\n")
+    
+    # Charger les données
+    daf_data <- read.table(daf_file, header = TRUE, sep = "\t")
+    div_data <- read.table(div_file, header = TRUE, sep = "\t")
+    
+    # Exécuter imputedMKT
+    tryCatch({
+      result <- imputedMKT(daf = daf_data, 
+                           divergence = div_data, 
+                           listCutoffs = c(0.05))
+      
+      # Extraire les résultats importants
+      summary_row <- data.frame(
+        ID = file_id,
+        Neutral_Polymorphism = result$mktTable[1, 1],
+        Neutral_Divergence = result$mktTable[1, 2],
+        Selected_Polymorphism = result$mktTable[2, 1],
+        Selected_Divergence = result$mktTable[2, 2],
+        alphaCorrected = result$alphaCorrected$alphaCorrected,
+        pvalue = result$alphaCorrected$pvalue,
+        Ka = result$divMetrics$metricsByCutoff$Ka,
+        Ks = result$divMetrics$metricsByCutoff$Ks,
+        omegaA = result$divMetrics$metricsByCutoff$omegaA,
+        omegaD = result$divMetrics$metricsByCutoff$omegaD,
+        d = result$fractions$d,
+        f = result$fractions$f,
+        b = result$fractions$b,
+        stringsAsFactors = FALSE
+      )
+      
+      # Ajouter à la liste des résultats
+      all_results[[file_id]] <- summary_row
+      
+    }, error = function(e) {
+      cat("Erreur avec", file_id, ":", e$message, "\n")
+    })
+    
+  } else {
+    cat("Fichiers manquants pour:", file_id, "\n")
+  }
+}
+
+# Combiner tous les résultats en un data.frame
+final_table <- do.call(rbind, all_results)
+final_table
+
+
+# Filtrer les résultats significatifs (p-value < 0.05)
+significant_results <- final_table %>%
+  filter(pvalue < 0.05)
+
+# Afficher les résultats significatifs
+cat("Nombre de tests significatifs (p < 0.05):", nrow(significant_results), "\n\n")
+print(significant_results)
+
+
+
+# Résultats avec différentes seuils de significativité
+cat("\nRésultats par seuil de significativité:\n")
+cat("p < 0.001 :", sum(final_table$pvalue < 0.001), "tests\n")
+cat("p < 0.01  :", sum(final_table$pvalue < 0.01), "tests\n")
+cat("p < 0.05  :", sum(final_table$pvalue < 0.05), "tests\n")
+cat("p < 0.1   :", sum(final_table$pvalue < 0.1), "tests\n")
+
+```
+  
+  # Visualize_amas_stats
+
+```{r polymorphism}
+
+setwd("C:/Users/barrientos/Documents/data/impMKT/monococcum")
+
+df <- read_delim("polymorphism.tsv", 
+    delim = "\t", escape_double = FALSE, 
+    trim_ws = TRUE)
+df
+
+# Aperçu
+glimpse(df)
+
+df <- df %>%
+  mutate(Total = P0 + Pi)
+
+# Vérification
+glimpse(df)
+
+# =====================
+# 1. Distribution globale
+# =====================
+
+# Histogramme du total
+ggplot(df, aes(x = Total)) +
+  geom_histogram(binwidth = 2, fill = "steelblue", color = "white") +
+  theme_minimal() +
+  labs(title = "Distribution du nombre total de polymorphismes par gène",
+       x = "Total polymorphismes", y = "Nombre de gènes")
+
+# Boxplot P0 vs Pi
+df_long <- df %>%
+  pivot_longer(cols = c(P0, Pi), names_to = "Type", values_to = "Count")
+
+ggplot(df_long, aes(x = Type, y = Count, fill = Type)) +
+  geom_boxplot() +
+  theme_minimal() +
+  labs(title = "Comparaison des distributions P0 et Pi")
+
+# =====================
+# 2. Comparaison PASS vs FAIL
+# =====================
+
+# Boxplot Total par Status
+ggplot(df, aes(x = Status, y = Total, fill = Status)) +
+  geom_boxplot() +
+  theme_minimal() +
+  labs(title = "Total polymorphismes selon Status")
+
+# Histogramme PASS vs FAIL
+ggplot(df, aes(x = Status, fill = Status)) +
+  geom_bar() +
+  theme_minimal() +
+  labs(title = "Proportion PASS vs FAIL")
+
+# =====================
+# 3. Relations entre variables
+# =====================
+
+# Scatterplot P0 vs Pi
+ggplot(df, aes(x = P0, y = Pi, color = Status)) +
+  geom_point(size = 3, alpha = 0.7) +
+  theme_minimal() +
+  labs(title = "Relation P0 vs Pi")
+
+# Scatterplot Di vs D0
+ggplot(df, aes(x = Di, y = D0, color = Status)) +
+  geom_point(size = 3, alpha = 0.7) +
+  theme_minimal() +
+  labs(title = "Relation Di vs D0")
+
+# =====================
+# 4. Mettre en avant les gènes extrêmes
+# =====================
+
+# Top gènes par Total (lollipop plot)
+df %>%
+  arrange(desc(Total)) %>%
+  slice(1:20) %>%
+  ggplot(aes(x = reorder(Gene, Total), y = Total, fill = Status)) +
+  geom_col() +
+  coord_flip() +
+  theme_minimal() +
+  labs(title = "Top 20 gènes par nombre de polymorphismes",
+       x = "Gène", y = "Total polymorphismes")
+
+
+```
+
+
+  
+# Visualize_amas_stats
+
+```{r amas_stats}
+#' Generate AMAS Alignment Statistics Visualizations with Summary Stats
+#'
+#' @param summary_path Path to the AMAS summary.txt file
+#' @param species_name Name of the species (for plot titles)
+#' @param save_plots Logical, whether to save plots as PDF (default: FALSE)
+#' @param output_dir Directory to save plots (if save_plots = TRUE)
+#'
+#' @return A list containing: 
+#'          - plots: List of ggplot objects
+#'          - stats: Data frame of summary statistics
+visualize_amas_stats <- function(summary_path, species_name, save_plots = FALSE, output_dir = ".") {
+  
+  # Load required packages
+  if (!requireNamespace("ggplot2", quietly = TRUE)) {
+    install.packages("ggplot2")
+  }
+  if (!requireNamespace("dplyr", quietly = TRUE)) {
+    install.packages("dplyr")
+  }
+  library(ggplot2)
+  library(dplyr)
+  
+  # Read the data
+  df <- read.table(summary_path, header = TRUE)
+  
+  # Calculate summary statistics
+  stats_summary <- df %>%
+    summarise(
+      # Alignment characteristics
+      mean_length = mean(Alignment_length),
+      median_length = median(Alignment_length),
+      total_length = sum(Alignment_length),
+      n_alignments = n(),
+      
+      # Variability
+      mean_variable_sites = mean(No_variable_sites),
+      mean_prop_variable = mean(Proportion_variable_sites),
+      mean_parsimony_sites = mean(Parsimony_informative_sites),
+      
+      # Missing data
+      mean_missing_percent = mean(Missing_percent),
+      median_missing_percent = median(Missing_percent),
+      
+      # Base composition
+      mean_gc_content = mean(GC_content),
+      mean_at_content = mean(AT_content),
+      
+      # Add more metrics as needed
+      .groups = 'drop'
+    ) %>%
+    mutate(species = species_name) %>%
+    select(species, everything())
+  
+  # Create plots (same as before)
+  plots <- list()
+  
+  plots$length_hist <- ggplot(df, aes(x = Alignment_length)) +
+    geom_histogram(binwidth = 100, fill = "skyblue", color = "black") +
+    theme_minimal() +
+    labs(title = paste("Alignment Lengths -", species_name),
+         subtitle = paste("Mean:", round(stats_summary$mean_length, 1), "bp"),
+         x = "Length (bp)", y = "Count")
+  
+  plots$missing_hist <- ggplot(df, aes(x = Missing_percent)) +
+    geom_histogram(binwidth = 2, fill = "orange", color = "black") +
+    theme_minimal() +
+    labs(title = paste("Missing Data -", species_name),
+         subtitle = paste("Mean:", round(stats_summary$mean_missing_percent, 1), "%"),
+         x = "Missing (%)", y = "Count")
+  
+  plots$length_vs_missing <- ggplot(df, aes(x = Alignment_length, y = Missing_percent)) +
+    geom_point(alpha = 0.5) +
+    geom_smooth(method = "lm", color = "red", se = FALSE) +
+    theme_minimal() +
+    labs(title = paste("Length vs Missing Data -", species_name),
+         x = "Length (bp)", y = "Missing (%)")
+  
+  plots$gc_density <- ggplot(df, aes(x = GC_content)) +
+    geom_density(fill = "green", alpha = 0.4) +
+    geom_vline(xintercept = stats_summary$mean_gc_content, linetype = "dashed") +
+    theme_minimal() +
+    labs(title = paste("GC Content -", species_name),
+         subtitle = paste("Mean:", round(stats_summary$mean_gc_content, 3)),
+         x = "GC Content", y = "Density")
+  
+  plots$length_vs_variable <- ggplot(df, aes(x = Alignment_length, y = Proportion_variable_sites)) +
+    geom_point(alpha = 0.5) +
+    geom_smooth(method = "loess", color = "blue", se = FALSE) +
+    theme_minimal() +
+    labs(title = paste("Variability -", species_name),
+         subtitle = paste("Mean proportion variable:", round(stats_summary$mean_prop_variable, 4)),
+         x = "Length (bp)", y = "Proportion Variable Sites")
+  
+  plots$missing_vs_variable <- ggplot(df, aes(x = Missing_percent, y = Proportion_variable_sites)) +
+    geom_point(alpha = 0.5, color = "red") +
+    geom_smooth(method = "lm", color = "black", se = FALSE) +
+    theme_minimal() +
+    labs(title = paste("Missing Data vs Variability -", species_name),
+         x = "Missing (%)", y = "Proportion Variable Sites")
+  
+  # Save plots if requested
+  # if (save_plots) {
+  #   dir.create(output_dir, showWarnings = FALSE)
+  #   
+  #   # Save plots
+  #   for (plot_name in names(plots)) {
+  #     ggsave(
+  #       filename = file.path(output_dir, paste0(species_name, "_", plot_name, ".pdf")),
+  #       plot = plots[[plot_name]],
+  #       device = "pdf",
+  #       width = 8,
+  #       height = 6
+  #     )
+  #   }
+  #   
+  #   # Save stats
+  #   write.csv(stats_summary, 
+  #             file.path(output_dir, paste0(species_name, "_summary_stats.csv")),
+  #             row.names = FALSE)
+  #   
+  #   message("Output saved to: ", output_dir)
+  # }
+  
+  return(list(plots = plots, stats = stats_summary))
+}
+```
+
+
+```{r amas_plots}
+
+# For Monococcum
+monococcum_results <- visualize_amas_stats(
+  summary_path = "C:/Users/barrientos/Documents/data/impMKT/monococcum/summary.txt",
+  species_name = "Monococcum",
+  save_plots = TRUE,
+  output_dir = "monococcum_results"
+)
+monococcum_results
+
+
+
+```
+
