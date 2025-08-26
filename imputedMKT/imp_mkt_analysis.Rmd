@@ -40,12 +40,218 @@ chooseCRANmirror(graphics = FALSE, ind = 1)
 
 library(iMKT)
 library(ggfortify)
-
+library(cowplot)
 library(tidyverse)
 library(ggplot2)
 
+library(readr)
+library(dplyr)
 
 ```
+
+Brief theoretical description about MKT
+
+The **standardMKT()** function uses daf and divergence input parameters and returns as output a list containing:
+
+alpha symbol: estimate of alpha using the standard MKT.
+Fisher exact test P-value: p-value obtained using the Fisher exact test on a 2x2 contingency table (MKT table).
+MKT table: table containing the number of polymorphic and divergent sites for neutral and selected classes.
+Divergence metrics: table containing estimates of Ka, Ks, omega, omegaA, omegaD.
+
+```{r standardMKT}
+
+#' @title Standard MKT
+#'
+#' @description Standard MKT calculation (McDonald and Kreitman 1991 Nature).
+#'
+#' @details The standard McDonald and Kreitman test (MKT) is used to detect the signature of selection at the molecular level. The MKT compares the amount of variation within a species (polymorphism, P) to the divergence (D) between species at two types of sites, one of which is putatively netral and used as the reference to detect selection at the other type of site. In the standard MKT, these sites are synonymous (putatively neutral, 0) and non-synonymous sites (selected sites, i) in a coding region. Under strict neutrality, the ratio of the number of selected and neutral polymorphic sites (Pi/P0) is equal to the ratio of the number of selected and neutral divergence sites (Di/D0). The null hypothesis of neutrality is rejected in a MKT when Di/D0 > Pi/P0. The excess of divergence relative to polymorphism for class i, is interpreted as adaptive selection for a subset of sites i. The fraction of adaptive fixations (alpha) is estimated from 1-(Pi/P0)(Ds/Dn). The significance of the test can be assesed with a Fisher exact test.
+#'
+#' @param daf data frame containing DAF, Pi and P0 values
+#' @param divergence data frame containing divergent and analyzed sites for selected (i) and neutral (0) classes
+#' 
+#' @return Standard MKT. List with alpha estimate, Fisher's exact test p-value,  MKT table and divergence metrics.
+#'
+#' @examples 
+#' standardMKT(myDafData, myDivergenceData)
+#' 
+#' @import utils
+#' @import stats
+#'
+#' @keywords MKT
+#' @export
+
+standardMKT <- function(daf, divergence) {
+	
+	## Check data
+	check <-checkInput(daf, divergence, 0, 1)
+	if(check$data == FALSE) {
+	 stop(check$print_errors) }
+
+	## Declare output data frame
+	output <- data.frame(alpha = numeric(0), pvalue = integer(0))
+	
+	## Create MKT table 
+	mktTable <- data.frame(Polymorphism = c(sum(daf$P0), sum(daf$Pi)), Divergence=c(divergence$D0,divergence$Di), row.names = c("Neutral class","Selected class"))
+	
+	## Estimation of alpha and fisher exact test p-value
+	alpha <- 1-(mktTable[2,1]/mktTable[1,1])*(mktTable[1,2]/mktTable[2,2])
+	pvalue <- fisher.test(mktTable)$p.value
+	
+	## Ka, Ks, omega, omegaA, omegaD
+	Ka     = divergence$Di/divergence$mi
+	Ks     = divergence$D0/divergence$m0
+	omega  = Ka/Ks
+	omegaA = omega*alpha
+	omegaD = omega-omegaA
+	divergenceMetrics = data.frame(Ka, Ks, omega, omegaA, omegaD)
+	
+	## Output  
+
+	output <- list('alpha'= data.frame('alpha' = alpha,'Fisher Test'= pvalue),
+		'mktTable'= mktTable,'divMetrics'=divergenceMetrics)
+	
+	return(output)
+}
+
+```
+
+
+```{r monococcum Standard MKT}
+
+
+################################
+##### All genes
+##############################
+
+setwd("C:/Users/barrientos/Documents/data/impMKT/monococcum")
+
+DIV_global_monococcum <- read_delim("DIV_global.tsv", 
+    delim = "\t", escape_double = FALSE, 
+    trim_ws = TRUE)
+DIV_global_monococcum
+
+SFS_global_monococcum <- read_delim("SFS_global.tsv", 
+    delim = "\t", escape_double = FALSE, 
+    trim_ws = TRUE)
+SFS_global_monococcum
+
+standardMKT(daf=SFS_global_monococcum, divergence=DIV_global_monococcum)
+
+
+
+################################
+##### per genes
+##############################
+
+# Analyse pour tous les fichiers
+setwd("C:/Users/barrientos/Documents/data/impMKT/monococcum")
+
+# Lister tous les fichiers
+all_files <- list.files(pattern = "\\.tsv$")
+
+# Extraire les IDs uniques (noms de base sans _daf.tsv ou _div.tsv)
+file_ids <- unique(gsub("_(daf|div)\\.tsv$", "", all_files))
+
+# Initialiser une liste pour stocker les résultats
+all_results <- list()
+
+# Boucle sur chaque ID
+for (file_id in file_ids) {
+  # Construire les noms de fichiers
+  daf_file <- paste0(file_id, "_daf.tsv")
+  div_file <- paste0(file_id, "_div.tsv")
+  
+  # Vérifier que les deux fichiers existent
+  if (daf_file %in% all_files && div_file %in% all_files) {
+    cat("Traitement de:", file_id, "\n")
+    
+    # Charger les données
+    daf_data <- read.table(daf_file, header = TRUE, sep = "\t")
+    div_data <- read.table(div_file, header = TRUE, sep = "\t")
+    
+    # Exécuter standardMKT avec gestion d'erreurs améliorée
+    tryCatch({
+      result <- standardMKT(daf = daf_data, divergence = div_data)
+      
+      # Extraire les valeurs selon la structure réelle
+      alpha_val <- result[["alpha.symbol"]]
+      pvalue_val <- result[["Fishers exact test P-value"]]
+      
+      # Extraire les valeurs de polymorphisme et divergence
+      Pi_val <- result[["MKT table"]][2, "Polymorphism"]  # Selected class polymorphism
+      P0_val <- result[["MKT table"]][1, "Polymorphism"]  # Neutral class polymorphism
+      Di_val <- result[["MKT table"]][2, "Divergence"]    # Selected class divergence
+      D0_val <- result[["MKT table"]][1, "Divergence"]    # Neutral class divergence
+      
+      # Extraire les métriques de divergence
+      Ka_val <- result[["Divergence metrics"]][1, "Ka"]
+      Ks_val <- result[["Divergence metrics"]][1, "Ks"]
+      omega_val <- result[["Divergence metrics"]][1, "omega"]
+      
+      # Stocker les résultats avec l'identifiant du fichier
+      all_results[[file_id]] <- data.frame(
+        File = file_id,
+        alpha = alpha_val,
+        pvalue = pvalue_val,
+        Pi = Pi_val,
+        P0 = P0_val,
+        Di = Di_val,
+        D0 = D0_val,
+        Ka = Ka_val,
+        Ks = Ks_val,
+        omega = omega_val,
+        stringsAsFactors = FALSE
+      )
+      
+    }, error = function(e) {
+      cat("Erreur pour", file_id, ":", e$message, "\n")
+    })
+  }
+}
+
+# Combiner tous les résultats en un data.frame
+if (length(all_results) > 0) {
+  final_table <- do.call(rbind, all_results)
+  
+  # Afficher tous les résultats
+  cat("Tous les résultats:\n")
+  print(final_table)
+  
+  # Filtrer les résultats significatifs (p-value < 0.05)
+  significant_results <- final_table %>%
+    filter(pvalue < 0.05)
+  
+  # Afficher les résultats significatifs
+  cat("\nNombre de tests significatifs (p < 0.05):", nrow(significant_results), "\n\n")
+  
+  if (nrow(significant_results) > 0) {
+    print(significant_results)
+    
+  }
+}
+
+
+
+
+```
+
+
+### imputedMKT correction
+
+To take adaptive and slightly deleterious mutation mutually into account, Pn , the count of segregating sites in the non-synonymous class, should be separated into the number of neutral variants and the number of weakly deleterious variants, Pn = Pn(neutral) + Pn(weakly del.). If both numbers are estimated, adaptive and weakly deleterious selection can be evaluated independently. 
+
+Consider a pair of 2×2 contingency tables. The first one corresponds to the standard MKT table with the theoretical counts of segregating sites and divergent sites for each cell. 
+
+The second table contains the count of Pn and Ps for two-frequency categories: below and over a threshold cutoff. 
+
+Add brief explanation about 2nd table!
+<!-- The estimate of the fraction of sites segregating neutrally within the DAF (derived allele frequency) < cutoff (f neutral DAF < cutoff) is f neutral(DAF<cutoff) = Ps(DAF<cutoff) / Ps . The expected number of segregating sites in the non-synonymous class which are neutral within the DAF < cutoff is P(neutral DAF<cutoff) = Pn × f neutral(DAF<cutoff). The expected number of neutral segregating sites in the non-synonymous class is Pn(neutral) = P(neutral DAF<cutoff) + Pn(DAF>cutoff).  -->
+
+To estimate alpha from the standard MKT table correcting by the segregation of weakly deleterious variants, we have to substitute the Pn by the expected number of neutral segregating sites, Pn(neutral). The correct estimate of alpha is then alpha = 1 - (Pn (neutral)/Ps)(Ds/Dn).
+
+The **imputedMKT()**returns also estimates on the **fractions of negative selection** (d: strongly deleterious, f: neutral and b: weakly deleterious).
+
+
 
 ```{r function}
 
@@ -245,16 +451,13 @@ SFS_global_monococcum
 imputedMKT(daf=SFS_global_monococcum, divergence=DIV_global_monococcum,listCutoffs=c(0.05))
 
 
+imputedMKT(daf=SFS_global_monococcum, divergence=DIV_global_monococcum, listCutoffs=c(0.05, 0.15,0.25,0.35), plot=TRUE)
 
 ```
 
 
 
 ```{r monococcum}
-
-
-
-
 
 setwd("C:/Users/barrientos/Documents/data/impMKT/monococcum")
 
@@ -286,7 +489,7 @@ for (file_id in file_ids) {
     tryCatch({
       result <- imputedMKT(daf = daf_data, 
                            divergence = div_data, 
-                           listCutoffs = c(0.05))
+                           listCutoffs = c(0.35))
       
       # Extraire les résultats importants
       summary_row <- data.frame(
@@ -333,15 +536,310 @@ cat("Nombre de tests significatifs (p < 0.05):", nrow(significant_results), "\n\
 print(significant_results)
 
 
+setwd("C:/Users/barrientos/Documents/data/impMKT/monococcum")
 
-# Résultats avec différentes seuils de significativité
-cat("\nRésultats par seuil de significativité:\n")
-cat("p < 0.001 :", sum(final_table$pvalue < 0.001), "tests\n")
-cat("p < 0.01  :", sum(final_table$pvalue < 0.01), "tests\n")
-cat("p < 0.05  :", sum(final_table$pvalue < 0.05), "tests\n")
-cat("p < 0.1   :", sum(final_table$pvalue < 0.1), "tests\n")
+daf <- read_delim("Tm_TA299_r1_2AG0152930_1_aligned_NT_hmm_reordered_renamed_clean_daf.tsv", 
+    delim = "\t", escape_double = FALSE, 
+    trim_ws = TRUE)
+daf
+
+setwd("C:/Users/barrientos/Documents/data/impMKT/monococcum")
+
+div <- read_delim("Tm_TA299_r1_2AG0152930_1_aligned_NT_hmm_reordered_renamed_clean_div.tsv", 
+    delim = "\t", escape_double = FALSE, 
+    trim_ws = TRUE)
+div
+
+
+    imputedMKT(daf =daf, divergence = div, listCutoffs=c(0.05, 0.15,0.25,0.35), plot = TRUE)
+
+    # Générer les commandes à copier-coller pour plots interactifs
+cat("### COMMANDES INTERACTIVES POUR PLOTS ###\n")
+for (gene_id in significant_results$ID) {
+  cat(paste0("daf <- read.table('", gene_id, "_daf.tsv', header=TRUE, sep='\\t')\n"))
+  cat(paste0("div <- read.table('", gene_id, "_div.tsv', header=TRUE, sep='\\t')\n"))
+  cat(paste0("imputedMKT(daf=daf, divergence=div, listCutoffs=c(0.05,0.15,0.25,0.35), plot=TRUE)\n\n"))
+}
+
+setwd("C:/Users/barrientos/Documents/data/impMKT/monococcum")
 
 ```
+  
+```{r asymptoticMKT}
+
+  
+  
+  #' @title Asymptotic MKT method
+#' 
+#' @description MKT calculation using asymptoticMK method (Messer and Petrov 2012 PNAS; Haller and Messer 2017 G3)
+#'
+#' @details In the standard McDonald and Kreitman test, the estimate of adaptive evolution (alpha) can be easily biased by the segregation of slightly deleterious non-synonymous substitutions. Specifically, slightly deleterious mutations contribute more to polymorphism than they do to divergence, and thus, lead to an underestimation of alpha. Messer and Petrov proposed a simple asymptotic extension of the MK test that yields accurate estimates of alpha. Briefly, this method first estimates alpha for each DAF category using its specific Pi and P0 values and then fits an exponential function to this values, of the form: alpha Fit(x) = a + b exp(-cx). Although the exponential function is generally expected to provide the best fit, a linear function is also fit to the data, of the form: alpha Fit(x) = a + bx. Finally, the asymptotic alpha estimate is obtained by extrapolating the value of this function to x = 1: alpha Asymptotic = alpha Fit (x=1). The exponential fit is always reported, except if the exponential fit fails to converge or if the linear fit is superior according to AIC. The code of this function is adapted from Haller and Messer 2017 G3 (http://github.com/MesserLab/asymptoticMK).
+#'
+#' @param daf data frame containing DAF, Pi and P0 values
+#' @param divergence data frame containing divergent and analyzed sites for selected (i) and neutral (0) classes
+#' @param xlow lower limit for asymptotic alpha fit
+#' @param xhigh higher limit for asymptotic alpha fit
+#' @param seed seed value (optional). No seed by default
+#'
+#' @return Estimation of asymptotic alpha and details about the model fit (function parameters, confidence intervals, etc.)
+#'
+#' @examples
+#' asymptoticMKT(myDafData, myDivergenceData, xlow=0, xhigh=0.9)
+#'
+#' @import utils
+#' @import stats
+#' @importFrom MASS mvrnorm
+#' @importFrom nls2 nls2
+#'
+#' @keywords MKT
+#' @export
+
+asymptoticMKT <- function(daf, divergence, xlow, xhigh, seed) {
+  
+  ## Check data
+  check <- checkInput(daf, divergence, xlow, xhigh)
+  if(check$data == FALSE) {
+    stop(check$print_errors) }
+
+  if (any(daf$P0 == 0)){ ## Warning P0
+    warning("Input daf file contains P0 values = 0.\nThis can bias the function fitting and the estimation of alpha.")}
+
+  ## Check seed
+  if(missing(seed)) {
+    seed <- NULL
+  } else {
+   set.seed(seed)
+  }
+  
+  ## Parse the data from argument x
+  f <- daf$daf #derived alelle frequencies
+  p <- daf$Pi #non-synonymous polymorphism 
+  p0 <- daf$P0 #synonymous polymorphism
+  
+  ## Parse the data from argument y
+  m <- divergence$mi #number of non-synonymous analyzed positions   
+  m0 <- divergence$m0 ##number of synonymous analyzed positions
+  d <- divergence$Di #non-synonymous divergence
+  d0 <- divergence$D0 #synonymous divergence
+  
+  ## Compute alpha values and trim
+  alpha <- 1 - (d0/d) * (p/p0)
+  cutoff_f1 <- xlow
+  cutoff_f2 <- xhigh
+  trim <- ((f >= cutoff_f1) & (f <= cutoff_f2))
+  f_trimmed <- f[trim]
+  alpha_trimmed <- alpha[trim]
+  
+  ## Compute the original MK alpha
+  alpha_nonasymp <- 1 - (d0/d) * (sum(p[trim])/sum(p0[trim])) #using trimmed values
+      
+  ## Two-step nls2() model fit at a given level of precision (res)
+  fitMKmodel <- function(alpha_trimmed, f_trimmed, res) {
+    
+    ## First fitting using starting values (st)
+    mod <- tryCatch({
+      
+      ## Starting values to fit the model  
+      st <- expand.grid(const_a=seq(-1,1,length.out=res + 1), const_b=seq(-1,1,length.out=res), const_c=seq(1,10,length.out=res + 1))
+      
+      ## Fitting
+      nls2(alpha_trimmed ~ const_a + const_b * exp(-const_c* f_trimmed), start=st, algorithm="brute-force", control=nls.control(maxiter=NROW(st)))
+      
+    }, error=function(cond) {}) ## Return condition of error when unable to fit
+    
+    ## If mod fails...
+    if (length(mod) == 0) { return(NULL) }
+    
+    ## Second fitting, starting from previous fit (mod)
+    mod2 <- tryCatch({
+      nls2(alpha_trimmed ~ const_a + const_b * exp(-const_c* f_trimmed), start = mod, control=nls.control(maxiter=200))
+      
+    }, error=function(cond) {}) ## Same error handling than the previous step
+    
+    ## If mod2 fails...
+    if (length(mod2) == 0) { return(NULL) }
+    
+    ## Return mod2 if fitted
+    return(mod2)
+  }
+  
+  mod1 <- fitMKmodel(alpha_trimmed, f_trimmed, 10)
+  
+  ## If mod1 did not work, try a deeper scan for a decent fit (res=20)
+  if (length(mod1) == 0) {
+    mod1 <- fitMKmodel(alpha_trimmed, f_trimmed, 20)
+  } 
+
+  tryCatch({
+    mod2 <- lm(alpha_trimmed ~ f_trimmed)
+  }, error=function(cond) {})
+  
+  ## Compute confidence intervals of alpha using predictNLS 
+  ## Get a CI using Monte Carlo simulation based upon a fitted model.  
+  ## Thanks to Andrej-Nikolai Spiess (http://www.dr-spiess.de) for this code.
+  predictNLS <- function(object, newdata, level = 0.95, nsim = 10000) {
+    
+    ## get right-hand side of formula
+    RHS <- as.list(object$call$formula)[[3]]
+    EXPR <- as.expression(RHS)
+    
+    ## all variables in model
+    VARS <- all.vars(EXPR)
+    
+    ## coefficients
+    COEF <- coef(object)
+    
+    ## extract predictor variable    
+    predNAME <- setdiff(VARS, names(COEF))  
+    
+    ## take fitted values, if 'newdata' is missing
+    if (missing(newdata)) {
+      newdata <- eval(object$data)[predNAME]
+      colnames(newdata) <- predNAME
+    }
+    
+    ## check that 'newdata' has same name as predVAR
+    if (names(newdata)[1] != predNAME) stop("newdata should have name '", predNAME, "'!")
+    
+    ## get parameter coefficients
+    COEF <- coef(object)
+    
+    ## get variance-covariance matrix
+    VCOV <- vcov(object)
+    
+    ## augment variance-covariance matrix for 'mvrnorm' 
+    ## by adding a column/row for 'error in x'
+    NCOL <- ncol(VCOV)
+    ADD1 <- c(rep(0, NCOL))
+    ADD1 <- matrix(ADD1, ncol = 1)
+    colnames(ADD1) <- predNAME
+    VCOV <- cbind(VCOV, ADD1)
+    ADD2 <- c(rep(0, NCOL + 1))
+    ADD2 <- matrix(ADD2, nrow = 1)
+    rownames(ADD2) <- predNAME
+    VCOV <- rbind(VCOV, ADD2) 
+    
+    ## iterate over all entries in 'newdata' as in usual 'predict.' functions
+    NR <- nrow(newdata)
+    respVEC <- numeric(NR)
+    seVEC <- numeric(NR)
+    varPLACE <- ncol(VCOV)   
+    
+    ## define counter function
+    counter <- function(i) {
+      if (i%%10 == 0) { cat(i) 
+      } else { cat(".") }
+      if (i%%50 == 0) { cat("\n") }
+      flush.console()
+    }
+    
+    ## create output matrix (df)
+    outMAT <- NULL 
+    
+    for (i in 1:NR) {
+      
+      ## get predictor values and optional errors
+      predVAL <- newdata[i, 1]
+      if (ncol(newdata) == 2) predERROR <- newdata[i, 2] else predERROR <- 0
+      names(predVAL) <- predNAME  
+      names(predERROR) <- predNAME  
+      
+      ## create mean vector for 'mvrnorm'
+      MU <- c(COEF, predVAL)
+      
+      ## create variance-covariance matrix for 'mvrnorm'
+      ## by putting error^2 in lower-right position of VCOV
+      newVCOV <- VCOV
+      newVCOV[varPLACE, varPLACE] <- predERROR^2
+      
+      ## create MC simulation matrix
+      simMAT <- mvrnorm(n = nsim, mu = MU, Sigma = newVCOV, empirical = TRUE)
+      
+      ## evaluate expression on rows of simMAT
+      EVAL <- try(eval(EXPR, envir = as.data.frame(simMAT)), silent = TRUE)
+      if (inherits(EVAL, "try-error")) stop("There was an error evaluating the simulations!")
+      
+      ## collect statistics
+      PRED <- data.frame(predVAL)
+      colnames(PRED) <- predNAME   
+      FITTED <- predict(object, newdata = data.frame(PRED))
+      MEAN.sim <- mean(EVAL, na.rm = TRUE)
+      SD.sim <- sd(EVAL, na.rm = TRUE)
+      MEDIAN.sim <- median(EVAL, na.rm = TRUE)
+      MAD.sim <- mad(EVAL, na.rm = TRUE)
+      QUANT <- quantile(EVAL, c((1 - level)/2, level + (1 - level)/2))
+      RES <- c(FITTED, MEAN.sim, SD.sim, MEDIAN.sim, MAD.sim, QUANT[1], QUANT[2])
+      outMAT <- rbind(outMAT, RES)
+    }
+    
+    colnames(outMAT) <- c("fit", "mean", "sd", "median", "mad", names(QUANT[1]), names(QUANT[2]))
+    rownames(outMAT) <- NULL   
+    return(outMAT)      
+  }
+  
+  ## Compare linear and exponential fit
+  linear_better <- FALSE
+
+  if ((length(mod1) == 0) || (AIC(mod2) < AIC(mod1))) {
+    linear_better <- TRUE }
+
+  ## If linear is not better, check wide of confidence intervals of exp fit
+  if (!linear_better) {
+    
+    tryCatch({
+      ci_pred <- predictNLS(mod1, newdata=data.frame(f_trimmed=1.0))
+      alpha_1_low <- ci_pred[6]
+      alpha_1_high <- ci_pred[7]
+  
+      if ((alpha_1_low < -100) || (alpha_1_high > 100)) {
+        linear_better <- TRUE }
+  
+    }, error=function(cond) {cat("Could not compute CI for the exponential alpha fit.\n")})
+  }
+
+  ## If linear fit better than exp fit
+  if (linear_better) {
+
+    ## Predict linear model confidence, not prediction
+    ci_pred <- predict.lm(mod2, newdata=data.frame(f_trimmed=1.0), interval="confidence")
+    alpha_1_low <- ci_pred[2]
+    alpha_1_high <- ci_pred[3]
+    
+    alpha_1_est <- predict(mod2, newdata=data.frame(f_trimmed=1.0))
+    const_a <- coef(mod2)["(Intercept)"]
+    const_b <- coef(mod2)["f_trimmed"]
+    const_c <- NA
+  
+  ## If exp is the best fit
+  } else {
+    ## Preparation of ouput (alpha asym, a, b, c)
+    alpha_1_est <- predict(mod1, newdata=data.frame(f_trimmed=1.0))
+    const_a <- coef(mod1)["const_a"]
+    const_b <- coef(mod1)["const_b"]
+    const_c <- coef(mod1)["const_c"]
+    alpha_1_low <- ci_pred[6]
+    alpha_1_high <- ci_pred[7]
+  }
+
+  ## Output table
+  result_df <- data.frame(model=(if ((length(mod1) == 0) || linear_better) "linear" else "exponential"), a=const_a, b=const_b, c=const_c, alpha_asymptotic=alpha_1_est, CI_low=alpha_1_low, CI_high=alpha_1_high, alpha_original=alpha_nonasymp, row.names=NULL)
+  return(result_df)
+}
+  
+  
+```
+  
+  
+  
+  
+```{r polymorphism}
+ 
+  asymptoticMKT(daf=SFS_global_monococcum, divergence=DIV_global_monococcum, xlow=0, xhigh=0.9)
+  
+```
+
+  
+  
   
   # Visualize_amas_stats
 
@@ -567,7 +1065,6 @@ visualize_amas_stats <- function(summary_path, species_name, save_plots = FALSE,
 
 
 ```{r amas_plots}
-
 # For Monococcum
 monococcum_results <- visualize_amas_stats(
   summary_path = "C:/Users/barrientos/Documents/data/impMKT/monococcum/summary.txt",
@@ -576,8 +1073,5 @@ monococcum_results <- visualize_amas_stats(
   output_dir = "monococcum_results"
 )
 monococcum_results
-
-
-
 ```
 
