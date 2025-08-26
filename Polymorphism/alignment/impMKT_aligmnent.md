@@ -946,24 +946,18 @@ formatSfs(multiFastaMatrix,rawSfs,dafFile,divFile,'/home/barrientosm/scratch/imp
 ```
 
 **Version that allows 10% of N**
-    Removes sequences with length mismatches
-
-    Removes sequences exceeding N threshold (10% Ns by default)
-
-    Converts sequences to a matrix format
+Removes sequences with length mismatches
+Removes sequences exceeding N threshold (10% Ns by default)
+Converts sequences to a matrix format
 
 
 For each position, the script:
+Skips sites with Ns or gaps
+Skips monomorphic sites (no variation)
 
-    Skips sites with Ns or gaps
-
-    Skips monomorphic sites (no variation)
-
-    Classifies as:
-
-        Polymorphic: Variable within samples (calculated derived allele frequency)
-
-        Divergent: Fixed difference from reference (counted as divergence)
+Classifies as:
+Polymorphic: Variable within samples (calculated derived allele frequency)
+Divergent: Fixed difference from reference (counted as divergence)
 
         
 ```py
