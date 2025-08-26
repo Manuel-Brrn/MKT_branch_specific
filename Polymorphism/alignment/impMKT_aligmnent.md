@@ -1226,6 +1226,28 @@ for f in *.fasta; do
         "$(basename $f .fasta)_div.tsv" \
         standard
 done
+
+############
+### skip files already processed
+######
+for f in *.fasta; do
+    daf_file="$(basename "$f" .fasta)_daf.tsv"
+    div_file="$(basename "$f" .fasta)_div.tsv"
+    
+    # Vérifier si les deux fichiers existent déjà
+    if [[ -f "$daf_file" && -f "$div_file" ]]; then
+        echo "Skipping $f, both $daf_file and $div_file already exist."
+        continue
+    fi
+    
+    echo "Processing $f"
+    python3 sfs_corrected.py \
+        analysis \
+        "$f" \
+        "$daf_file" \
+        "$div_file" \
+        standard
+done
 ```
 
 **Asses if there is enough polymophism**
