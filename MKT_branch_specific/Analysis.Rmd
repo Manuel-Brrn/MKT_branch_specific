@@ -597,17 +597,17 @@ Résultat : Chaque espèce a maintenant un DataFrame complet avec à la fois les
 
 
 # Extraire les colonnes demandées pour chaque espèce
-urartu_subset <- fd_urartu[, c("Contig_name", "polymN0.0", "polymS0.0", "piN_piS_ratio")]
+urartu_subset <- fd_urartu[, c("Contig_name", "nN", "nS", "polymN0.0", "polymS0.0", "piN_piS_ratio")]
 urartu_subset
 
-monococcum_subset <- fd_monococcum[, c("Contig_name", "polymN0.0", "polymS0.0", "piN_piS_ratio")]
+monococcum_subset <- fd_monococcum[, c("Contig_name","nN", "nS", "polymN0.0", "polymS0.0", "piN_piS_ratio")]
 monococcum_subset$Contig_name <- gsub("^Tm_", "", monococcum_subset$Contig_name)
 monococcum_subset
 
-speltoides_subset <- fd_speltoides[, c("Contig_name", "polymN0.0", "polymS0.0", "piN_piS_ratio")]
+speltoides_subset <- fd_speltoides[, c("Contig_name","nN", "nS", "polymN0.0", "polymS0.0", "piN_piS_ratio")]
 speltoides_subset
 
-mutica_subset <- fd_mutica[, c("Contig_name", "polymN0.0", "polymS0.0", "piN_piS_ratio")]
+mutica_subset <- fd_mutica[, c("Contig_name", "nN", "nS", "polymN0.0", "polymS0.0", "piN_piS_ratio")]
 mutica_subset
 
   genes_ids <- read.table("/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/VESPA/alignment/translated_alignments_cleaned/gene_table.tsv", header = TRUE)
@@ -644,6 +644,8 @@ add_dn_ds <- function(subset_df, species_col, species_prefix, genes_ids, dn_ds_v
   merged <- merged %>%
     select(
       Contig_name,
+      nN, 
+      nS,
       polymN0.0,
       polymS0.0,
       piN_piS_ratio,
@@ -679,7 +681,7 @@ filter_species_columns <- function(df, species_prefix) {
   
   # Garder seulement les colonnes essentielles + celles de l'espèce
   df %>%
-    select(Contig_name, HOG, polymN0.0, polymS0.0, piN_piS_ratio,
+    select(Contig_name, HOG, nN, nS, polymN0.0, polymS0.0, piN_piS_ratio,
            all_of(required_cols))
 }
 
@@ -688,6 +690,103 @@ urartu_final <- filter_species_columns(urartu_subset2, "Turartu")
 monococcum_final <- filter_species_columns(monococcum_subset2, "Tmonococcum")
 speltoides_final <- filter_species_columns(speltoides_subset2, "Aespeltoides")
 # mutica_final <- filter_species_columns(mutica_subset2, "Aemutica")
+
 ```
 
+*Run Mk test
 
+```{r MK_test}
+
+filtered_data <- urartu_final[!is.na(urartu_final$Turartu_dN) & !is.na(urartu_final$Turartu_dS), ]
+
+# ===========================
+# Fonction MK générique
+# ===========================
+MK <- function(row) {
+  test_fisher <- fisher.test(matrix(as.numeric(row), ncol = 2))
+  return(test_fisher$p.value)
+}
+
+# Détection automatique des colonnes divergence
+dN_col <- grep("_dN$", colnames(filtered_data), value = TRUE)
+dS_col <- grep("_dS$", colnames(filtered_data), value = TRUE)
+
+if (length(dN_col) != 1 | length(dS_col) != 1) {
+  stop("⚠️ Impossible d'identifier de manière unique les colonnes de divergence (_dN et _dS)")
+}
+
+# Application du MK test avec les bonnes colonnes
+filtered_data$MK_test_p_value <- apply(
+  filtered_data[, c("polymN0.0", "polymS0.0", dN_col, dS_col)],
+  1, FUN = MK
+)
+
+# Correction multiple (Bonferroni)
+filtered_data$MK_test_pval_bonferroni <- p.adjust(
+  filtered_data$MK_test_p_value, method = "bonferroni"
+)
+
+# ===========================
+#  graphiques 
+# ===========================
+
+ggplot(filtered_data, aes(x = (filtered_data$nN+filtered_data$nS), y = -log10(MK_test_pval_bonferroni))) +
+  geom_point(alpha = 0.6, color = ifelse(filtered_data$MK_test_pval_bonferroni < 0.05, "red", "blue")) +
+  geom_hline(yintercept = -log10(0.05), linetype = "dashed", color = "gray50") +
+  scale_x_continuous(trans = "log10") +  # Log-scale for complete sites
+  labs(
+    title = "MK Test Significance vs. Number of Sites",
+    x = "Number of Sites (log10 scale)",
+    y = "-log10(MK test p-value)",
+    caption = "Dashed line: p = 0.05 threshold"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  annotate("text", x = max((filtered_data$nN+filtered_data$nS))*0.7, 
+           y = -log10(0.05)+0.5, label = "(p < 0.05)", color = "red")
+
+ggplot(filtered_data, aes(x = (filtered_data$nN+filtered_data$nS), 
+                         y = -log10(MK_test_pval_bonferroni),
+                         size = polymorphism)) +
+  geom_point(aes(color = ifelse(MK_test_pval_bonferroni < 0.05, "sig", "ns")), alpha = 0.6) +
+  scale_color_manual(values = c("sig" = "red", "ns" = "gray70")) +
+  scale_x_log10() +
+  geom_hline(yintercept = -log10(0.05), linetype = "dashed") +
+  labs(size = "polymorphism count", color = "Significance") +
+  theme_bw()
+
+
+#############
+
+ggplot(filtered_data, aes(x = (nN + nS), y = -log10(MK_test_p_value))) +
+  geom_point(alpha = 0.6, color = ifelse(filtered_data$MK_test_p_value < 0.05, "red", "blue")) +
+  geom_hline(yintercept = -log10(0.05), linetype = "dashed", color = "gray50") +
+  scale_x_continuous(trans = "log10") +
+  labs(
+    title = "MK Test Significance (Raw p-values) vs. Number of Sites",
+    x = "Number of Sites (log10 scale)",
+    y = "-log10(MK test p-value)",
+    caption = "Dashed line: p = 0.05 threshold (uncorrected)"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  annotate("text", x = max((filtered_data$nN + filtered_data$nS)) * 0.7, 
+           y = -log10(0.05) + 0.5, label = "(p < 0.05)", color = "red")
+#
+ggplot(filtered_data, aes(x = (nN + nS), 
+                         y = -log10(MK_test_p_value),
+                         size = polymorphism)) +
+  geom_point(aes(color = ifelse(MK_test_p_value < 0.05, "sig", "ns")), alpha = 0.6) +
+  scale_color_manual(values = c("sig" = "red", "ns" = "gray70")) +
+  scale_x_log10() +
+  geom_hline(yintercept = -log10(0.05), linetype = "dashed") +
+  labs(
+    title = "MK Test (Raw p-values) with Polymorphism Count",
+    x = "Number of Sites (log10 scale)",
+    y = "-log10(MK test p-value)",
+    size = "Polymorphism count", 
+    color = "Significance"
+  ) +
+  theme_bw()
+
+```
