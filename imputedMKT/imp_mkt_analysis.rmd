@@ -1,6 +1,3 @@
-
-
-
 ---
 title: "impMKT"
 author: "Manuel_Barrientos"
