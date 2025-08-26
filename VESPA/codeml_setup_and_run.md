@@ -400,6 +400,91 @@ for i, directory in enumerate(directories, 1):
         print(f"Failed: {e}")
 
 print("\nAll directories processed!")
+
+###############
+##### skip already treated directories
+###########
+
+#!/usr/bin/env python3
+import os
+import glob
+import subprocess
+import time
+
+# ===== CONFIGURATION =====
+BASE_DIR = "/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/VESPA/alignment/translated_alignments_cleaned"
+DN_DS_SCRIPT = os.path.join(BASE_DIR, "dn_ds.py")  # chemin complet vers dn_ds.py
+# =========================
+
+# Vérifier que dn_ds.py existe
+if not os.path.exists(DN_DS_SCRIPT):
+    print(f"ERROR: dn_ds.py not found at: {DN_DS_SCRIPT}")
+    exit(1)
+
+# Trouver tous les dossiers Omega0_5
+patterns = [
+    os.path.join(BASE_DIR, "Inferred_Genetree_HOG*/HOG*/Codeml_Setup_HOG_codeml_input/cleaned_*/model_branch/Omega0_5"),
+    os.path.join(BASE_DIR, "Inferred_Genetree_HOG*/HOG*/Codeml_Setup_HOG_codeml_input/cleaned/m0/Omega0_5")
+]
+
+directories = []
+for pattern in patterns:
+    directories.extend(glob.glob(pattern))
+
+# Supprimer les doublons
+directories = list(set(directories))
+
+if not directories:
+    print("No Omega0_5 directories found.")
+    exit(0)
+
+print(f"Found {len(directories)} Omega0_5 directories to process.")
+
+# Exécuter dn_ds.py dans chaque dossier
+for i, directory in enumerate(directories, 1):
+    # Vérifier si le dossier a déjà été traité
+    output_files = glob.glob(os.path.join(directory, "*_codeml.tab"))
+    if output_files:  # si la liste n'est pas vide, on skip
+        print(f"Skipping {directory}, output already exists.")
+        continue
+
+    print(f"\n [{i}/{len(directories)}] Processing: {directory}")
+    
+    # Vérifier que le dossier existe
+    if not os.path.exists(directory):
+        print(f"Directory does not exist: {directory}")
+        continue
+    
+    try:
+        start_time = time.time()
+        result = subprocess.run(
+            ["python3", DN_DS_SCRIPT],
+            cwd=directory,   # exécute dans ce dossier Omega0_5
+            capture_output=True,
+            text=True,
+            timeout=600  # 10 minutes max par dossier
+        )
+        end_time = time.time()
+        
+        print(f"Execution time: {end_time - start_time:.2f} seconds")
+        
+        if result.returncode == 0:
+            print(" Success")
+            if result.stdout.strip():
+                print("Output:", result.stdout.strip())
+        else:
+            print(" Failed with return code:", result.returncode)
+            if result.stderr.strip():
+                print("Errors:", result.stderr.strip())
+                
+    except subprocess.TimeoutExpired:
+        print(" Timeout: Script took too long (more than 10 minutes)")
+    except FileNotFoundError:
+        print("Python3 or dn_ds.py not found")
+    except Exception as e:
+        print(f" Unexpected error: {e}")
+
+print("\nAll directories processed!")
 ```
 
 **Create a summary table from codeml parsers**
