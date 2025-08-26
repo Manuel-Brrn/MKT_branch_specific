@@ -403,10 +403,9 @@ print("\nAll directories processed!")
 ```
 
 **Create a summary table from codeml parsers**
-summary_codeml.py: Create two files one file with dn,ds, and omega for each branch and omega for m0 for every genes, and one file with every lnL of each branch and the lnL of the m0 model
+summary_omega_dn_ds.py: Create two files one file with dn,ds, and omega for each branch and omega for m0 for every genes, and one file with every lnL of each branch and the lnL of the m0 model
 
 ```py
-summary_dn_ds_analysis.py:
 #!/usr/bin/env python3
 import os
 import glob
@@ -445,8 +444,14 @@ for f in branch_files:
     hog, species = match.groups()
 
     df = pd.read_csv(f, sep="\t")
-    # On prend la dernière ligne pour la branche testée
-    row = df.iloc[-1]
+
+    # On sélectionne la branche testée (celle avec omega différent des autres)
+    if df["omega_branch"].nunique() > 1:
+        common_omega = df["omega_branch"].mode()[0]  # valeur la + fréquente
+        row = df.loc[df["omega_branch"] != common_omega].iloc[0]
+    else:
+        # fallback si toutes les branches ont le même omega
+        row = df.iloc[-1]
 
     if hog not in branch_results:
         branch_results[hog] = {}
@@ -460,7 +465,7 @@ for f in branch_files:
     }
     branch_lnl[hog][species] = row["lnL"]
 
-# Charger les résultats du modèle m0
+# Charger les résultats du modèle m0 (inchangé)
 for f in m0_files:
     match = re.search(r"(HOG\d+)", f)
     if not match:
