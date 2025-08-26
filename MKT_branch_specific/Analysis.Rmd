@@ -630,36 +630,64 @@ head(dn_ds_values)
 
 
 
-# --- Fonction générique pour ajouter les valeurs de dn/ds au polymorphisme ---
+
 add_dn_ds <- function(subset_df, species_col, species_prefix, genes_ids, dn_ds_values) {
   # Associer chaque contig_name à un HOG
   merged <- subset_df %>%
-    left_join(genes_ids %>% select(HOG, !!species_col), by = c("Contig_name" = species_col)) %>%
+    left_join(
+      genes_ids %>% select(HOG, !!species_col),
+      by = c("Contig_name" = species_col)
+    ) %>%
     left_join(dn_ds_values, by = "HOG")
   
-  # Extraire les colonnes dN, dS, omega correspondant à l'espèce
-  dn_col <- paste0(species_prefix, "_dN")
-  ds_col <- paste0(species_prefix, "_dS")
-  omega_col <- paste0(species_prefix, "_omega")
-  
-  # Ajouter les colonnes fixN_rate, fixS_rate, dn/ds
+  # Sélectionner uniquement les colonnes pertinentes
   merged <- merged %>%
-    mutate(
-      fixN_rate = .data[[dn_col]],
-      fixS_rate = .data[[ds_col]],
-      dn_ds = .data[[omega_col]]
-    ) %>%
-    select(Contig_name, polymN0.0, polymS0.0, piN_piS_ratio, fixN_rate, fixS_rate, dn_ds, everything())
+    select(
+      Contig_name,
+      polymN0.0,
+      polymS0.0,
+      piN_piS_ratio,
+      everything()
+    )
   
   return(merged)
 }
+
+
 
 # --- Application aux différents subsets ---
 urartu_subset2 <- add_dn_ds(urartu_subset, "T_urartu", "Turartu", genes_ids, dn_ds_values)
 monococcum_subset2 <- add_dn_ds(monococcum_subset, "T_monococcum", "Tmonococcum", genes_ids, dn_ds_values)
 speltoides_subset2 <- add_dn_ds(speltoides_subset, "Ae_speltoides", "Aespeltoides", genes_ids, dn_ds_values)
-mutica_subset2 <- add_dn_ds(mutica_subset, "Ae_mutica", "Aemutica", genes_ids, dn_ds_values)
+# mutica_subset2 <- add_dn_ds(mutica_subset, "Ae_mutica", "Aemutica", genes_ids, dn_ds_values)
 
+
+
+# Fonction pour sélectionner automatiquement les bonnes colonnes
+filter_species_columns <- function(df, species_prefix) {
+  dn_col <- paste0(species_prefix, "_dN")
+  ds_col <- paste0(species_prefix, "_dS")
+  omega_col <- paste0(species_prefix, "_omega")
+  
+  # Vérifier que les colonnes existent
+  required_cols <- c(dn_col, ds_col, omega_col)
+  missing_cols <- setdiff(required_cols, names(df))
+  
+  if (length(missing_cols) > 0) {
+    warning("Colonnes manquantes: ", paste(missing_cols, collapse = ", "))
+  }
+  
+  # Garder seulement les colonnes essentielles + celles de l'espèce
+  df %>%
+    select(Contig_name, HOG, polymN0.0, polymS0.0, piN_piS_ratio,
+           all_of(required_cols))
+}
+
+# Application
+urartu_final <- filter_species_columns(urartu_subset2, "Turartu")
+monococcum_final <- filter_species_columns(monococcum_subset2, "Tmonococcum")
+speltoides_final <- filter_species_columns(speltoides_subset2, "Aespeltoides")
+# mutica_final <- filter_species_columns(mutica_subset2, "Aemutica")
 ```
 
 
