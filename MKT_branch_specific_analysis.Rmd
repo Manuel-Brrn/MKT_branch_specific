@@ -1,0 +1,665 @@
+---
+title: "dNdSpiNpiS"
+author: "Manuel_Barrientos"
+date: "25/11/2024"
+output:
+  html_document:
+    theme: flatly
+    highlight: tango
+    toc: yes
+    toc_depth: 2
+    code_folding: hide
+    df_print: paged
+  pdf_document:
+    toc: yes
+    toc_depth: '2'
+---
+
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(
+  cache = FALSE,
+  echo = FALSE,      # Hide the R code
+  message = FALSE,   # Hide loading messages
+  warning = FALSE,   # Hide warnings
+  fig.align = 'center', # Center figures
+  fig.width = 8,     # Set figure width
+  fig.height = 6     # Set figure height
+)
+
+```
+
+```{r setup_cran, include=FALSE}
+# Set CRAN mirror to avoid installation errors
+chooseCRANmirror(graphics = FALSE, ind = 1)
+```
+
+
+```{r packages, include=TRUE}
+
+library(readr)
+library(dplyr)
+library(patchwork)
+library(ggplot2)
+library(tidyr)
+library(stringr) 
+library(boot)
+library(patchwork)
+library(scales)
+library(R.utils)
+
+```
+
+
+
+
+# Visualize_amas_stats
+Cette fonction lit le fichier "summary.txt" produit par AMAS et génère des graphiques descriptifs (longueur des alignements, données manquantes, composition GC, proportion de sites variables).
+Elle retourne :
+ - une liste de graphiques (ggplot)
+ - un tableau de statistiques récapitulatives
+
+```{r amas_stats}
+#' Generate AMAS Alignment Statistics Visualizations with Summary Stats
+#'
+#' @param summary_path Path to the AMAS summary.txt file
+#' @param species_name Name of the species (for plot titles)
+#' @param save_plots Logical, whether to save plots as PDF (default: FALSE)
+#' @param output_dir Directory to save plots (if save_plots = TRUE)
+#'
+#' @return A list containing: 
+#'          - plots: List of ggplot objects
+#'          - stats: Data frame of summary statistics
+visualize_amas_stats <- function(summary_path, species_name, save_plots = FALSE, output_dir = ".") {
+  
+  # Load required packages
+  if (!requireNamespace("ggplot2", quietly = TRUE)) {
+    install.packages("ggplot2")
+  }
+  if (!requireNamespace("dplyr", quietly = TRUE)) {
+    install.packages("dplyr")
+  }
+  library(ggplot2)
+  library(dplyr)
+  
+  # Read the data
+  df <- read.table(summary_path, header = TRUE)
+  
+  # Calculate summary statistics
+  stats_summary <- df %>%
+    summarise(
+      # Alignment characteristics
+      mean_length = mean(Alignment_length),
+      median_length = median(Alignment_length),
+      total_length = sum(Alignment_length),
+      n_alignments = n(),
+      
+      # Variability
+      mean_variable_sites = mean(No_variable_sites),
+      mean_prop_variable = mean(Proportion_variable_sites),
+      mean_parsimony_sites = mean(Parsimony_informative_sites),
+      
+      # Missing data
+      mean_missing_percent = mean(Missing_percent),
+      median_missing_percent = median(Missing_percent),
+      
+      # Base composition
+      mean_gc_content = mean(GC_content),
+      mean_at_content = mean(AT_content),
+      
+      # Add more metrics as needed
+      .groups = 'drop'
+    ) %>%
+    mutate(species = species_name) %>%
+    select(species, everything())
+  
+  # Create plots (same as before)
+  plots <- list()
+  
+  plots$length_hist <- ggplot(df, aes(x = Alignment_length)) +
+    geom_histogram(binwidth = 100, fill = "skyblue", color = "black") +
+    theme_minimal() +
+    labs(title = paste("Alignment Lengths -", species_name),
+         subtitle = paste("Mean:", round(stats_summary$mean_length, 1), "bp"),
+         x = "Length (bp)", y = "Count")
+  
+  plots$missing_hist <- ggplot(df, aes(x = Missing_percent)) +
+    geom_histogram(binwidth = 2, fill = "orange", color = "black") +
+    theme_minimal() +
+    labs(title = paste("Missing Data -", species_name),
+         subtitle = paste("Mean:", round(stats_summary$mean_missing_percent, 1), "%"),
+         x = "Missing (%)", y = "Count")
+  
+  plots$length_vs_missing <- ggplot(df, aes(x = Alignment_length, y = Missing_percent)) +
+    geom_point(alpha = 0.5) +
+    geom_smooth(method = "lm", color = "red", se = FALSE) +
+    theme_minimal() +
+    labs(title = paste("Length vs Missing Data -", species_name),
+         x = "Length (bp)", y = "Missing (%)")
+  
+  plots$gc_density <- ggplot(df, aes(x = GC_content)) +
+    geom_density(fill = "green", alpha = 0.4) +
+    geom_vline(xintercept = stats_summary$mean_gc_content, linetype = "dashed") +
+    theme_minimal() +
+    labs(title = paste("GC Content -", species_name),
+         subtitle = paste("Mean:", round(stats_summary$mean_gc_content, 3)),
+         x = "GC Content", y = "Density")
+  
+  plots$length_vs_variable <- ggplot(df, aes(x = Alignment_length, y = Proportion_variable_sites)) +
+    geom_point(alpha = 0.5) +
+    geom_smooth(method = "loess", color = "blue", se = FALSE) +
+    theme_minimal() +
+    labs(title = paste("Variability -", species_name),
+         subtitle = paste("Mean proportion variable:", round(stats_summary$mean_prop_variable, 4)),
+         x = "Length (bp)", y = "Proportion Variable Sites")
+  
+  plots$missing_vs_variable <- ggplot(df, aes(x = Missing_percent, y = Proportion_variable_sites)) +
+    geom_point(alpha = 0.5, color = "red") +
+    geom_smooth(method = "lm", color = "black", se = FALSE) +
+    theme_minimal() +
+    labs(title = paste("Missing Data vs Variability -", species_name),
+         x = "Missing (%)", y = "Proportion Variable Sites")
+  
+  # Save plots if requested
+  # if (save_plots) {
+  #   dir.create(output_dir, showWarnings = FALSE)
+  #   
+  #   # Save plots
+  #   for (plot_name in names(plots)) {
+  #     ggsave(
+  #       filename = file.path(output_dir, paste0(species_name, "_", plot_name, ".pdf")),
+  #       plot = plots[[plot_name]],
+  #       device = "pdf",
+  #       width = 8,
+  #       height = 6
+  #     )
+  #   }
+  #   
+  #   # Save stats
+  #   write.csv(stats_summary, 
+  #             file.path(output_dir, paste0(species_name, "_summary_stats.csv")),
+  #             row.names = FALSE)
+  #   
+  #   message("Output saved to: ", output_dir)
+  # }
+  
+  return(list(plots = plots, stats = stats_summary))
+}
+```
+
+
+```{r amas_plots}
+
+# For Monococcum
+monococcum_results <- visualize_amas_stats(
+  summary_path = "/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/dNdSpiNpiS/monococcum_covered/dNdSpiNpiS_input/summary.txt",
+  species_name = "Monococcum",
+  save_plots = TRUE,
+  output_dir = "monococcum_results"
+)
+monococcum_results
+
+# For Speltoides
+speltoides_results <- visualize_amas_stats(
+  summary_path = "/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/dNdSpiNpiS/speltoides_covered/dNdSpiNpiS_input/summary.txt",
+  species_name = "Speltoides",
+  save_plots = TRUE,
+  output_dir = "speltoides_results"
+)
+speltoides_results
+
+# For Urartu
+urartu_results <- visualize_amas_stats(
+  summary_path = "/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/dNdSpiNpiS/urartu_covered/dNdSpiNpiS_input/summary.txt",
+  species_name = "Urartu",
+  save_plots = TRUE,
+  output_dir = "urartu_results"
+)
+urartu_results
+
+# For Mutica
+mutica_results <- visualize_amas_stats(
+  summary_path = "/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/dNdSpiNpiS/mutica_covered/dNdSpiNpiS_input/summary.txt",
+  species_name = "Mutica",
+  save_plots = TRUE,
+  output_dir = "mutica_results"
+)
+mutica_results
+
+
+# View summary statistics
+# monococcum_results$stats
+# speltoides_results$stats
+# urartu_results$stats
+
+
+# Compare species
+combined_stats <- bind_rows(
+  monococcum_results$stats,
+  speltoides_results$stats,
+  urartu_results$stats,
+  mutica_results$stats
+
+)
+combined_stats
+
+```
+
+Objectif : Cette fonction traite les fichiers de données dNdSpiNpiS pour une espèce donnée en calculant les statistiques de diversité nucléotidique, divergence et polymorphismes.
+
+Étapes principales :
+
+    Lecture des données : Importe le fichier TSV avec les statistiques par gène
+
+    Nettoyage des valeurs : Remplace les valeurs invalides (-1, -2) par NA
+
+    Calcul de π weighted : Calcule la diversité nucléotidique pondérée par le nombre de sites
+
+    Statistiques de divergence : Calcule dN/dS global avec intervalles de confiance bootstrap
+
+    Statistiques de polymorphisme : Calcule πN/πS avec intervalles de confiance bootstrap
+
+    Filtrage : Supprime les gènes avec SNPs tri/alléliques et faible polymorphisme
+
+    Visualisations : Produit des histogrammes des distributions clés
+
+Sortie : Liste contenant les données nettoyées, filtrées et les intervalles de confiance
+
+```{r dNdSpiNpiS_species}
+
+
+process_dNdSpiNpiS <- function(file_path, species_name, n_boot = 100) {
+  
+  message("===== Processing ", species_name, " =====")
+  
+  # 1. Read data
+  stats_df <- read_delim(file_path, 
+                         delim = "\t", 
+                         escape_double = FALSE, 
+                         trim_ws = TRUE)
+  
+  # 2. Clean invalid values
+  stats_df <- stats_df %>%
+    mutate(fixS = ifelse(fixS %in% c(-1, -2), NA, fixS),
+           fixN = ifelse(fixN %in% c(-1, -2), NA, fixN))
+  
+  # 3. Weighted nucleotide diversity (π)
+  pi_colname <- paste0(species_name, "_pi")
+  stats_df[[pi_colname]] <- (
+    stats_df[[paste0(species_name, "_piN")]] * stats_df$nN +
+    stats_df[[paste0(species_name, "_piS")]] * stats_df$nS
+  ) / (stats_df$nN + stats_df$nS)
+  
+  stats_df <- stats_df %>% filter(.data[[pi_colname]] != -1)
+  
+  # ====== SUMMARY ======
+  cat("\n==================== SUMMARY for", species_name, "====================\n")
+  
+  # Nucleotide diversity
+  cat("\n** Nucleotide diversity (π) **\n")
+  print(summary(stats_df[[pi_colname]]))
+  
+  cat("\n** Alignment length **\n")
+  print(summary(stats_df$nN + stats_df$nS))
+  
+  # ---- Divergence ----
+  cat("\n** Divergence **\n")
+  fixN_weighted_allSites <- sum(stats_df$fixN * (stats_df$nN + stats_df$nS), na.rm = TRUE) /
+                            sum(stats_df$nN + stats_df$nS, na.rm = TRUE)
+  fixS_weighted_allSites <- sum(stats_df$fixS * (stats_df$nN + stats_df$nS), na.rm = TRUE) /
+                            sum(stats_df$nN + stats_df$nS, na.rm = TRUE)
+  
+  fixN_weighted_by_nN <- sum(stats_df$fixN * stats_df$nN, na.rm = TRUE) /
+                         sum(stats_df$nN, na.rm = TRUE)
+  fixS_weighted_by_nS <- sum(stats_df$fixS * stats_df$nS, na.rm = TRUE) /
+                         sum(stats_df$nS, na.rm = TRUE)
+  
+  DN_DS_ratio <- fixN_weighted_by_nN / fixS_weighted_by_nS
+  stats_df$DN_DS_ratio <- ifelse(stats_df$fixS == 0, NA, stats_df$fixN / stats_df$fixS)
+  
+  cat("fixN (weighted, all sites):", fixN_weighted_allSites, "\n")
+  cat("fixS (weighted, all sites):", fixS_weighted_allSites, "\n")
+  cat("Global dN/dS ratio (weighted by site type):", DN_DS_ratio, "\n")
+  print(summary(stats_df$DN_DS_ratio))
+  
+  # Bootstrap CI for dN/dS
+  set.seed(42)
+  bootstrap_dn_ds <- function(data) {
+    sample_data <- data[sample(nrow(data), replace = TRUE), ]
+    fn <- sum(sample_data$fixN * sample_data$nN, na.rm = TRUE) / sum(sample_data$nN, na.rm = TRUE)
+    fs <- sum(sample_data$fixS * sample_data$nS, na.rm = TRUE) / sum(sample_data$nS, na.rm = TRUE)
+    fn / fs
+  }
+  dn_ds_ci <- quantile(replicate(n_boot, bootstrap_dn_ds(stats_df)), probs = c(0.025, 0.975))
+  cat("95% CI for dN/dS (bootstrap):", paste0("[", round(dn_ds_ci[1], 4), ", ", round(dn_ds_ci[2], 4), "]\n"))
+  
+  # ---- Polymorphism ----
+  cat("\n** Polymorphism **\n")
+  piN_weighted_allSites <- sum(stats_df$polymN0.0 * (stats_df$nN + stats_df$nS), na.rm = TRUE) /
+                           sum(stats_df$nN + stats_df$nS, na.rm = TRUE)
+  piS_weighted_allSites <- sum(stats_df$polymS0.0 * (stats_df$nN + stats_df$nS), na.rm = TRUE) /
+                           sum(stats_df$nN + stats_df$nS, na.rm = TRUE)
+  
+  piN_weighted_by_nN <- sum(stats_df$polymN0.0 * stats_df$nN, na.rm = TRUE) / sum(stats_df$nN, na.rm = TRUE)
+  piS_weighted_by_nS <- sum(stats_df$polymS0.0 * stats_df$nS, na.rm = TRUE) / sum(stats_df$nS, na.rm = TRUE)
+  
+  total_polymorphism <- piN_weighted_by_nN + piS_weighted_by_nS
+  piN_piS_ratio <- piN_weighted_allSites / piS_weighted_allSites
+  
+  stats_df$polymorphism <- stats_df$polymN0.0 + stats_df$polymS0.0
+  stats_df$piN_piS_ratio <- ifelse(stats_df$polymS0.0 == 0, NA, stats_df$polymN0.0 / stats_df$polymS0.0)
+  
+  cat("piN (weighted, all sites):", piN_weighted_allSites, "\n")
+  cat("piS (weighted, all sites):", piS_weighted_allSites, "\n")
+  cat("Total polymorphism (πN + πS):", total_polymorphism, "\n")
+  cat("πN/πS ratio (weighted, all sites):", piN_piS_ratio, "\n")
+  print(summary(stats_df$piN_piS_ratio))
+  
+  # Bootstrap CI for πN/πS
+  bootstrap_piN_piS <- function(data) {
+    sample_data <- data[sample(nrow(data), replace = TRUE), ]
+    pn <- sum(sample_data$polymN0.0 * sample_data$nN, na.rm = TRUE) / sum(sample_data$nN, na.rm = TRUE)
+    ps <- sum(sample_data$polymS0.0 * sample_data$nS, na.rm = TRUE) / sum(sample_data$nS, na.rm = TRUE)
+    pn / ps
+  }
+  pi_ci <- quantile(replicate(n_boot, bootstrap_piN_piS(stats_df)), probs = c(0.025, 0.975))
+  cat("95% CI for πN/πS (bootstrap):", paste0("[", round(pi_ci[1], 4), ", ", round(pi_ci[2], 4), "]\n"))
+  
+  # ---- Bi-allelic SNP stats ----
+  BiAllelic_SNP_weighted <- sum(stats_df$BiAllelic_SNP * (stats_df$nN + stats_df$nS), na.rm = TRUE) /
+                            sum(stats_df$nN + stats_df$nS, na.rm = TRUE)
+  cat("\nBi-allelic SNPs (weighted): ", BiAllelic_SNP_weighted, "\n")
+  cat("\nBi-allelic SNPs:\n")
+  print(summary(stats_df$BiAllelic_SNP))
+  
+  # ---- Filter Tri- and Quadri-allelic SNPs ----
+  cat("number of genes before filtering out low polymorphic alignments and tri, quadri snps:", nrow(dataset), "\n")
+
+  dataset <- stats_df[, c(1, 3:11, 24, (ncol(stats_df)-3):ncol(stats_df))] %>% 
+    na.omit() %>%
+    filter(TriAllelic_SNP == 0, QuadriAllelic_SNP == 0, polymorphism >= 5)
+  
+
+cat("number of genes kept:", nrow(dataset), "\n")
+dataset
+
+  dataset$polymorphism
+  # ---- Plots ----
+  ggplot(dataset, aes(x = nN + nS)) +
+    geom_histogram(bins = 100, fill = "skyblue", color = "black") +
+    labs(title = "Distribution of CDS alignment with sufficient data", x = "Length", y = "Frequency") +
+    theme_minimal()
+  
+  hist(dataset$BiAllelic_SNP, breaks=50, main="Distribution of BiAllelic_SNP",
+       xlab="BiAllelic_SNP", col="lightblue", border="black")
+  hist(dataset$polymN0.0, breaks=100, main="Distribution of non synonymous polymorphism",
+       xlab="polymN0.0", col="lightblue", border="black")
+  hist(dataset$polymS0.0, breaks=100, main="Distribution of synonymous polymorphism",
+       xlab="polymS0.0", col="lightblue", border="black")
+  hist(dataset$polymorphism, breaks=100, main="Distribution of polymorphism",
+       xlab="polymorphism", col="lightblue", border="black")
+  hist(dataset$DN_DS_ratio, breaks=100, main="Distribution of fixN/fixS Ratios",
+       xlab="fixN / fixS", col="lightblue", border="black")
+  hist(dataset$piN_piS_ratio, breaks=100, main="Distribution of πN/πS Ratios",
+       xlab="πN / πS", col="lightblue", border="black")
+  
+  return(list(
+    cleaned_data = stats_df,
+    filtered_dataset = dataset,
+    dn_ds_ci = dn_ds_ci,
+    piN_piS_ci = pi_ci
+  ))
+}
+
+```
+  
+  
+  
+```{r dNdSpiNpiS_species}
+  # Lancer pour chaque espèce
+T_urartu <- process_dNdSpiNpiS(
+  file_path = "/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/dNdSpiNpiS/urartu_covered/dNdSpiNpiS_output/dNdSpiNpiS_output",
+  species_name = "T_urartu"
+)
+
+
+T_monococcum <- process_dNdSpiNpiS(
+  file_path = "/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/dNdSpiNpiS/monococcum_covered/dNdSpiNpiS_output/dNdSpiNpiS_output",
+  species_name = "T_monococcum"
+)
+
+
+Ae_speltoides <- process_dNdSpiNpiS(
+  file_path = "/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/dNdSpiNpiS/speltoides_covered/dNdSpiNpiS_output/dNdSpiNpiS_output",
+  species_name = "Ae_speltoides"
+)
+
+Ae_mutica <- process_dNdSpiNpiS(
+  file_path = "/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/dNdSpiNpiS/mutica_covered/dNdSpiNpiS_output/dNdSpiNpiS_output",
+  species_name = "Ae_mutica"
+)
+
+T_urartu
+T_monococcum
+Ae_speltoides
+Ae_mutica
+
+```
+
+Étapes principales :
+
+    Normalisation par kb : Convertit toutes les mesures en taux par 1000 bp
+
+    Régressions et plots marginaux : Explore les relations entre longueur des CDS et différentes métriques
+
+    Distributions des taux : Compare les distributions des taux normalisés via density plots et histogrammes
+
+    
+```{r dNdSpiNpiS_species}
+  analyze_filtered_data <- function(dataset, species_name) {
+  
+  message("===== Analyzing filtered data for ", species_name, " =====")
+  
+  # Calculate rates per kb
+  filtered_data <- dataset %>%
+    mutate(
+      SNP_rate = BiAllelic_SNP / ((nN + nS) / 1000),
+      polymS_rate = polymS0.0 / ((nN + nS) / 1000),
+      polymN_rate = polymN0.0 / ((nN + nS) / 1000),
+      polym_rate = (polymorphism / (nN + nS)) * 1000,
+      fixS_rate = fixS / ((nN + nS) / 1000),
+      fixN_rate = fixN / ((nN + nS) / 1000)
+    )
+  
+  # Summary of rates
+  message("\n** Summary of normalized rates **")
+  filtered_data %>%
+    select(SNP_rate, polymS_rate, polymN_rate, polym_rate, fixS_rate, fixN_rate) %>%
+    summary() %>% print()
+  
+  # Scatter plots with marginals
+  message("\n** Generating regression/marginal plots **")
+  plot_with_marginals((filtered_data$nN + filtered_data$nS), filtered_data$BiAllelic_SNP,
+                      "CDS Length (bp)", "Biallelic SNPs", "Biallelic SNPs vs CDS Length")
+  plot_with_marginals((filtered_data$nN + filtered_data$nS), filtered_data$fixN,
+                      "CDS Length (bp)", "fixN", "Fixed Non-synonymous vs CDS Length")
+  plot_with_marginals((filtered_data$nN + filtered_data$nS), filtered_data$fixS,
+                      "CDS Length (bp)", "fixS", "Fixed Synonymous vs CDS Length")
+  plot_with_marginals((filtered_data$nN + filtered_data$nS), filtered_data$polymN0.0,
+                      "CDS Length (bp)", "polymN0.0", "Non-synonymous polymorphism vs CDS Length")
+  plot_with_marginals((filtered_data$nN + filtered_data$nS), filtered_data$polymS0.0,
+                      "CDS Length (bp)", "polymS0.0", "Synonymous polymorphism vs CDS Length")
+  plot_with_marginals((filtered_data$nN + filtered_data$nS), filtered_data$polymorphism,
+                      "CDS Length (bp)", "polymorphism", "Polymorphism vs CDS Length")
+  plot_with_marginals((filtered_data$nN + filtered_data$nS), filtered_data[[paste0(species_name, "_pi")]],
+                      "CDS Length (bp)", "Nucleotide Diversity", "Nucleotide Diversity vs CDS Length")
+  plot_with_marginals((filtered_data$nN + filtered_data$nS), filtered_data$DN_DS_ratio,
+                      "CDS Length (bp)", "fixN/fixS", "Divergence Ratio vs CDS Length")
+  plot_with_marginals((filtered_data$nN + filtered_data$nS), filtered_data$piN_piS_ratio,
+                      "CDS Length (bp)", "πN/πS", "Polymorphism Ratio vs CDS Length")
+  
+  # Distribution of CDS length
+  ggplot(filtered_data, aes(x = nN + nS)) +
+    geom_histogram(bins = 100, fill = "skyblue", color = "black") +
+    labs(title = "Distribution of CDS alignment with sufficient data", 
+         x = "Length", y = "Frequency") +
+    theme_minimal()
+  
+  # Reshape for rate density plots
+  rate_data_long <- filtered_data %>%
+    select(SNP_rate, polymS_rate, polymN_rate, polym_rate, fixS_rate, fixN_rate) %>%
+    pivot_longer(cols = everything(), names_to = "rate_type", values_to = "rate_value")
+  
+  rate_means <- filtered_data %>%
+    summarise(across(c(SNP_rate, polymS_rate, polymN_rate, polym_rate, fixS_rate, fixN_rate),
+                     mean, na.rm = TRUE)) %>%
+    pivot_longer(everything(), names_to = "rate_type", values_to = "mean_value")
+  
+  # Density plot
+  ggplot(rate_data_long, aes(x = rate_value, fill = rate_type)) +
+    geom_density(alpha = 0.5) +
+    geom_vline(data = rate_means, aes(xintercept = mean_value), 
+               color = "red", linetype = "dashed", linewidth = 0.8) +
+    geom_text(data = rate_means,
+              aes(x = mean_value, y = Inf, 
+                  label = paste("Mean =", round(mean_value, 2))),
+              vjust = 2, hjust = -0.1, color = "red", size = 3) +
+    labs(title = "Distribution of Normalized Rates (per kb)",
+         subtitle = "Dashed red lines show mean values",
+         x = "Rate Value", y = "Density") +
+    theme_minimal() +
+    facet_wrap(~rate_type, scales = "free") +
+    theme(legend.position = "none",
+          plot.title = element_text(face = "bold", size = 14),
+          strip.text = element_text(face = "bold"))
+  
+  # Histogram plot
+  ggplot(rate_data_long, aes(x = rate_value, fill = rate_type)) +
+    geom_histogram(bins = 30, color = "black", alpha = 0.6) +
+    labs(title = "Histogram of Normalized Rates (per kb)",
+         x = "Rate Value", y = "Count") +
+    theme_minimal() +
+    facet_wrap(~rate_type, scales = "free") +
+    theme(legend.position = "none",
+          plot.title = element_text(face = "bold", size = 14),
+          strip.text = element_text(face = "bold"))
+  
+  return(filtered_data)
+  }
+```
+
+```{r dNdSpiNpiS_species}
+
+fd_urartu <- analyze_filtered_data(T_urartu$filtered_dataset, "T_urartu")
+
+fd_monococcum <- analyze_filtered_data(T_monococcum$filtered_dataset, "T_monococcum")
+
+fd_speltoides <- analyze_filtered_data(Ae_speltoides$filtered_dataset, "Ae_speltoides")
+
+fd_mutica <- analyze_filtered_data(Ae_mutica$filtered_dataset, "Ae_mutica")
+
+
+
+fd_urartu
+fd_monococcum
+fd_speltoides
+fd_mutica
+```
+
+
+Étapes principales :
+
+    Sélection des colonnes : Garde seulement les métriques essentielles (polymorphismes et ratios)
+
+    Nettoyage des IDs : Standardise les noms de contigs entre les différents jeux de données
+
+    Lecture des tables de correspondance : Importe la table liant les contigs aux HOGs
+
+    Lecture des valeurs dN/dS : Importe les résultats de codeml calculés précédemment
+
+
+add_dn_ds fonction : Fusionne les données de polymorphismes avec les valeurs dN/dS de codeml.
+
+Mécanisme :
+
+    Jointure avec genes_ids : Associe chaque contig à son HOG correspondant
+
+    Jointure avec dn_ds_values : Ajoute les valeurs dN, dS et omega de codeml
+
+    Renommage des colonnes : Standardise les noms pour avoir une structure cohérente
+
+    Sélection finale : Garde les colonnes essentielles pour l'analyse MK
+
+Résultat : Chaque espèce a maintenant un DataFrame complet avec à la fois les polymorphismes (πN, πS) et les divergences (dN, dS) pour chaque gène, permettant des analyses MK avancée.
+
+```{r merge_codelm}
+
+
+# Extraire les colonnes demandées pour chaque espèce
+urartu_subset <- fd_urartu[, c("Contig_name", "polymN0.0", "polymS0.0", "piN_piS_ratio")]
+urartu_subset
+
+monococcum_subset <- fd_monococcum[, c("Contig_name", "polymN0.0", "polymS0.0", "piN_piS_ratio")]
+monococcum_subset$Contig_name <- gsub("^Tm_", "", monococcum_subset$Contig_name)
+monococcum_subset
+
+speltoides_subset <- fd_speltoides[, c("Contig_name", "polymN0.0", "polymS0.0", "piN_piS_ratio")]
+speltoides_subset
+
+mutica_subset <- fd_mutica[, c("Contig_name", "polymN0.0", "polymS0.0", "piN_piS_ratio")]
+mutica_subset
+
+  genes_ids <- read.table("/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/VESPA/alignment/translated_alignments_cleaned/gene_table.tsv", header = TRUE)
+genes_ids
+
+# Remplacer tous les points par des underscores dans toutes les colonnes
+genes_ids[] <- lapply(genes_ids, function(x) gsub("\\.", "_", x))
+
+# Afficher le résultat
+print(genes_ids)
+
+
+dn_ds_values <- read.table(
+  "/home/barrientosm/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/VESPA/alignment/translated_alignments_cleaned/summary_dn_ds_wide.tsv",
+  header = TRUE,
+  sep = "\t",         # important si c'est un fichier tabulé !
+  stringsAsFactors = FALSE
+)
+head(dn_ds_values)
+
+
+
+# --- Fonction générique pour ajouter les valeurs de dn/ds au polymorphisme ---
+add_dn_ds <- function(subset_df, species_col, species_prefix, genes_ids, dn_ds_values) {
+  # Associer chaque contig_name à un HOG
+  merged <- subset_df %>%
+    left_join(genes_ids %>% select(HOG, !!species_col), by = c("Contig_name" = species_col)) %>%
+    left_join(dn_ds_values, by = "HOG")
+  
+  # Extraire les colonnes dN, dS, omega correspondant à l'espèce
+  dn_col <- paste0(species_prefix, "_dN")
+  ds_col <- paste0(species_prefix, "_dS")
+  omega_col <- paste0(species_prefix, "_omega")
+  
+  # Ajouter les colonnes fixN_rate, fixS_rate, dn/ds
+  merged <- merged %>%
+    mutate(
+      fixN_rate = .data[[dn_col]],
+      fixS_rate = .data[[ds_col]],
+      dn_ds = .data[[omega_col]]
+    ) %>%
+    select(Contig_name, polymN0.0, polymS0.0, piN_piS_ratio, fixN_rate, fixS_rate, dn_ds, everything())
+  
+  return(merged)
+}
+
+# --- Application aux différents subsets ---
+urartu_subset2 <- add_dn_ds(urartu_subset, "T_urartu", "Turartu", genes_ids, dn_ds_values)
+monococcum_subset2 <- add_dn_ds(monococcum_subset, "T_monococcum", "Tmonococcum", genes_ids, dn_ds_values)
+speltoides_subset2 <- add_dn_ds(speltoides_subset, "Ae_speltoides", "Aespeltoides", genes_ids, dn_ds_values)
+mutica_subset2 <- add_dn_ds(mutica_subset, "Ae_mutica", "Aemutica", genes_ids, dn_ds_values)
+
+```
+
+
