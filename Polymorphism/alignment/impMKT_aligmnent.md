@@ -1273,7 +1273,6 @@ Total P0, total Pi, total polymorphismes,
 Statut (PASS ou FAIL).
 
 ```py
-
 #!/usr/bin/env python3
 import pandas as pd
 import glob
@@ -1281,10 +1280,9 @@ import os
 import shutil
 
 # Paramètres
-input_dir = "/storage/replicated/cirad/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/MACSE/monococcum_covered_impMKT_secale/nucleotides_alignments_cleaned_hmm_cleaner/reordered_alignments/renamed_header/cleaned_final/test"                  # dossier où sont tes fichiers
-output_dir = "/storage/replicated/cirad/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/MACSE/monococcum_covered_impMKT_secale/nucleotides_alignments_cleaned_hmm_cleaner/reordered_alignments/renamed_header/cleaned_final/test/available_data"    # dossier de sortie
-summary_file = "summary.tsv"     # tableau récapitulatif
-
+input_dir = "/storage/replicated/cirad/projects/GE2POP/2024_TRANS_CWR/2024_MANUEL_BARRIENTOS/02_results/dn_ds_pipeline/MACSE/monococcum_covered_impMKT_secale/nucleotides_alignments_cleaned_hmm_cleaner/reordered_alignments/renamed_header/cleaned_final/test"
+output_dir = os.path.join(input_dir, "available_data")
+summary_file = "summary.tsv"
 
 # Créer le dossier de sortie
 os.makedirs(output_dir, exist_ok=True)
@@ -1294,11 +1292,12 @@ summary = []
 # Parcourir tous les fichiers _daf.tsv
 for daf_file in glob.glob(os.path.join(input_dir, "*_daf.tsv")):
     base = os.path.basename(daf_file).replace("_daf.tsv", "")
-    
+
+    # Lecture du fichier DAF
     try:
         df = pd.read_csv(daf_file, sep="\t")
     except Exception as e:
-        print(f"⚠️ Erreur lecture {daf_file}: {e}")
+        print(f" Erreur lecture {daf_file}: {e}")
         continue
 
     # Conversion explicite en numérique
@@ -1308,22 +1307,37 @@ for daf_file in glob.glob(os.path.join(input_dir, "*_daf.tsv")):
     total_P0 = df["P0"].sum()
     total_Pi = df["Pi"].sum()
     total = total_P0 + total_Pi
-    
-    # Vérification des critères
+
+    # Lecture du fichier DIV correspondant
+    div_file = os.path.join(input_dir, base + "_div.tsv")
+    Di = None
+    D0 = None
+    if os.path.exists(div_file):
+        try:
+            div_df = pd.read_csv(div_file, sep="\t")
+            div_df = div_df.apply(pd.to_numeric, errors="coerce").fillna(0)
+            if not div_df.empty:
+                Di = float(div_df["Di"].iloc[0])
+                D0 = float(div_df["D0"].iloc[0])
+        except Exception as e:
+            print(f" Erreur lecture {div_file}: {e}")
+    else:
+        print(f" Fichier DIV manquant pour {base}")
+
+    # Vérification des critères MKT
     if total >= 5 and total_P0 > 0 and total_Pi > 0:
         status = "PASS"
-        
         # Copier tous les fichiers avec le même basename
         pattern = os.path.join(input_dir, base + "*")
         for f in glob.glob(pattern):
             shutil.copy(f, output_dir)
     else:
         status = "FAIL"
-    
-    summary.append([base, int(total_P0), int(total_Pi), int(total), status])
+
+    summary.append([base, int(total_P0), int(total_Pi), int(total), Di, D0, status])
 
 # Écrire le tableau récapitulatif
-summary_df = pd.DataFrame(summary, columns=["Gene","P0","Pi","Total","Status"])
+summary_df = pd.DataFrame(summary, columns=["Gene","P0","Pi","Total","Di","D0","Status"])
 summary_df.to_csv(summary_file, sep="\t", index=False)
 
 print(f"\n Analyse terminée. Résultats dans {summary_file}")
