@@ -213,6 +213,7 @@ sed -E 's/:[0-9.]+//g; s/[0-9]+//g' SpeciesTree_rooted.txt > SpeciesTree_topolog
 #### remove problematic names
 sed -i -e 's/Se_cereale_cds/S_cereale_cds/g' \
        -e 's/Tr_/T_/g' Simplified_SpeciesTree.txt
+sed -i 's/_cds//g' Simplified_SpeciesTree.txt
 ```
 
 
