@@ -209,7 +209,13 @@ Orthofinder repertory:
 
 ```bash
 sed -E 's/:[0-9.]+//g; s/[0-9]+//g' SpeciesTree_rooted.txt > SpeciesTree_topology_only.txt
+
+#### remove problematic names
+sed -i -e 's/Se_cereale_cds/S_cereale_cds/g' \
+       -e 's/Tr_/T_/g' Simplified_SpeciesTree.txt
 ```
+
+
 
 **Run infer_genetree**
 ```bash
